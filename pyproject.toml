@@ -35,9 +35,15 @@ performance = [
     "py-spy>=0.3.14",
 ]
 
+mcp = [
+    "fastmcp>=0.1.0",
+    "mcp>=0.1.0",
+]
+
 all = [
     "lionagi-qe-fleet[dev]",
     "lionagi-qe-fleet[performance]",
+    "lionagi-qe-fleet[mcp]",
 ]
 
 [build-system]

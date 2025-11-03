@@ -1,0 +1,247 @@
+{
+  "mcpServers": {
+    "lionagi-qe": {
+      "command": "python",
+      "args": [
+        "-m",
+        "lionagi_qe.mcp.mcp_server"
+      ],
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/src"
+      },
+      "description": "LionAGI Agentic Quality Engineering Fleet - 19 specialized testing agents",
+      "capabilities": {
+        "tools": true,
+        "resources": true,
+        "prompts": false
+      },
+      "tools": [
+        {
+          "name": "test_generate",
+          "description": "Generate comprehensive test suites with AI-powered edge case detection",
+          "category": "testing"
+        },
+        {
+          "name": "test_execute",
+          "description": "Execute test suites with parallel processing and real-time coverage",
+          "category": "testing"
+        },
+        {
+          "name": "coverage_analyze",
+          "description": "Analyze test coverage with O(log n) gap detection algorithms",
+          "category": "testing"
+        },
+        {
+          "name": "quality_gate",
+          "description": "Intelligent quality gate with risk assessment",
+          "category": "quality"
+        },
+        {
+          "name": "performance_test",
+          "description": "Run performance and load tests with k6, JMeter, or Locust",
+          "category": "performance"
+        },
+        {
+          "name": "security_scan",
+          "description": "Multi-layer security scanning (SAST, DAST, dependency scanning)",
+          "category": "security"
+        },
+        {
+          "name": "fleet_orchestrate",
+          "description": "Orchestrate complex multi-agent workflows (pipeline, parallel, fan-out-fan-in)",
+          "category": "orchestration"
+        },
+        {
+          "name": "get_fleet_status",
+          "description": "Get comprehensive fleet status and metrics",
+          "category": "monitoring"
+        },
+        {
+          "name": "requirements_validate",
+          "description": "Validate requirements using INVEST criteria and BDD generation",
+          "category": "requirements"
+        },
+        {
+          "name": "flaky_test_hunt",
+          "description": "Detect and stabilize flaky tests using statistical analysis",
+          "category": "testing"
+        },
+        {
+          "name": "api_contract_validate",
+          "description": "Validate API contracts and detect breaking changes",
+          "category": "api"
+        },
+        {
+          "name": "regression_risk_analyze",
+          "description": "Smart test selection with ML-based risk analysis",
+          "category": "testing"
+        },
+        {
+          "name": "test_data_generate",
+          "description": "Generate realistic test data at high speed (10k+ records/sec)",
+          "category": "data"
+        },
+        {
+          "name": "visual_test",
+          "description": "Visual regression testing with AI-powered comparison",
+          "category": "testing"
+        },
+        {
+          "name": "chaos_test",
+          "description": "Resilience testing with controlled fault injection",
+          "category": "reliability"
+        },
+        {
+          "name": "deployment_readiness",
+          "description": "Multi-factor deployment readiness assessment",
+          "category": "deployment"
+        },
+        {
+          "name": "test_execute_stream",
+          "description": "Execute tests with real-time progress streaming",
+          "category": "testing"
+        }
+      ],
+      "resources": [
+        {
+          "name": "fleet-status",
+          "description": "Real-time fleet status and metrics",
+          "uri": "lionagi-qe://fleet/status"
+        },
+        {
+          "name": "agent-metrics",
+          "description": "Individual agent performance metrics",
+          "uri": "lionagi-qe://agents/{agent_id}/metrics"
+        },
+        {
+          "name": "memory-namespace",
+          "description": "Shared memory namespace (aqe/*)",
+          "uri": "lionagi-qe://memory/{namespace}"
+        }
+      ],
+      "configuration": {
+        "enable_routing": true,
+        "enable_learning": false,
+        "default_framework": "pytest",
+        "default_coverage_threshold": 80.0,
+        "max_parallel_agents": 10
+      },
+      "agents": [
+        {
+          "id": "test-generator",
+          "name": "Test Generator",
+          "description": "AI-powered test generation with edge case detection",
+          "skills": ["agentic-quality-engineering", "tdd-london-chicago", "api-testing-patterns"]
+        },
+        {
+          "id": "test-executor",
+          "name": "Test Executor",
+          "description": "Multi-framework test execution with parallel processing",
+          "skills": ["agentic-quality-engineering", "shift-left-testing"]
+        },
+        {
+          "id": "coverage-analyzer",
+          "name": "Coverage Analyzer",
+          "description": "Real-time gap detection with O(log n) algorithms",
+          "skills": ["agentic-quality-engineering", "quality-metrics"]
+        },
+        {
+          "id": "quality-gate",
+          "name": "Quality Gate",
+          "description": "Intelligent quality gate with risk assessment",
+          "skills": ["agentic-quality-engineering", "risk-based-testing"]
+        },
+        {
+          "id": "performance-tester",
+          "name": "Performance Tester",
+          "description": "Load testing with k6, JMeter, Gatling integration",
+          "skills": ["agentic-quality-engineering", "performance-testing"]
+        },
+        {
+          "id": "security-scanner",
+          "name": "Security Scanner",
+          "description": "Multi-layer security with SAST/DAST scanning",
+          "skills": ["agentic-quality-engineering", "security-testing"]
+        },
+        {
+          "id": "requirements-validator",
+          "name": "Requirements Validator",
+          "description": "INVEST criteria validation and BDD generation",
+          "skills": ["agentic-quality-engineering", "context-driven-testing"]
+        },
+        {
+          "id": "production-intelligence",
+          "name": "Production Intelligence",
+          "description": "Production data to test scenarios conversion",
+          "skills": ["agentic-quality-engineering", "shift-right-testing"]
+        },
+        {
+          "id": "fleet-commander",
+          "name": "Fleet Commander",
+          "description": "Hierarchical fleet coordination (50+ agents)",
+          "skills": ["agentic-quality-engineering", "holistic-testing-pact"]
+        },
+        {
+          "id": "deployment-readiness",
+          "name": "Deployment Readiness",
+          "description": "Multi-factor risk assessment for deployments",
+          "skills": ["agentic-quality-engineering", "risk-based-testing"]
+        },
+        {
+          "id": "regression-risk-analyzer",
+          "name": "Regression Risk Analyzer",
+          "description": "Smart test selection with ML patterns",
+          "skills": ["agentic-quality-engineering", "regression-testing"]
+        },
+        {
+          "id": "test-data-architect",
+          "name": "Test Data Architect",
+          "description": "High-speed realistic data generation (10k+ records/sec)",
+          "skills": ["agentic-quality-engineering", "test-data-management"]
+        },
+        {
+          "id": "api-contract-validator",
+          "name": "API Contract Validator",
+          "description": "Breaking change detection across API versions",
+          "skills": ["agentic-quality-engineering", "api-testing-patterns", "contract-testing"]
+        },
+        {
+          "id": "flaky-test-hunter",
+          "name": "Flaky Test Hunter",
+          "description": "Statistical flakiness detection and auto-stabilization",
+          "skills": ["agentic-quality-engineering", "exploratory-testing-advanced"]
+        },
+        {
+          "id": "visual-tester",
+          "name": "Visual Tester",
+          "description": "Visual regression with AI-powered comparison",
+          "skills": ["agentic-quality-engineering", "visual-testing-advanced"]
+        },
+        {
+          "id": "chaos-engineer",
+          "name": "Chaos Engineer",
+          "description": "Resilience testing with controlled fault injection",
+          "skills": ["agentic-quality-engineering", "chaos-engineering-resilience"]
+        },
+        {
+          "id": "quality-analyzer",
+          "name": "Quality Analyzer",
+          "description": "Comprehensive quality metrics analysis",
+          "skills": ["agentic-quality-engineering", "quality-metrics"]
+        },
+        {
+          "id": "mobile-tester",
+          "name": "Mobile Tester",
+          "description": "iOS/Android testing with device fragmentation support",
+          "skills": ["agentic-quality-engineering", "mobile-testing"]
+        },
+        {
+          "id": "accessibility-tester",
+          "name": "Accessibility Tester",
+          "description": "WCAG 2.2 compliance and screen reader validation",
+          "skills": ["agentic-quality-engineering", "accessibility-testing"]
+        }
+      ]
+    }
+  }
+}
