@@ -1,0 +1,64 @@
+[project]
+name = "lionagi-qe-fleet"
+version = "0.1.0"
+description = "Agentic Quality Engineering Fleet powered by LionAGI"
+authors = [
+    { name = "Your Name", email = "your.email@example.com" },
+]
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "lionagi>=0.18.2",
+    "pydantic>=2.8.0",
+    "pytest>=8.0.0",
+    "pytest-asyncio>=1.1.0",
+    "pytest-cov>=6.0.0",
+    "hypothesis>=6.100.0",
+    "coverage>=7.0.0",
+    "bandit>=1.7.0",
+    "safety>=3.0.0",
+    "aiohttp>=3.9.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "black>=24.0.0",
+    "ruff>=0.3.0",
+    "mypy>=1.9.0",
+    "ipython>=8.20.0",
+    "ipykernel>=6.29.0",
+]
+
+performance = [
+    "locust>=2.20.0",
+    "py-spy>=0.3.14",
+]
+
+all = [
+    "lionagi-qe-fleet[dev]",
+    "lionagi-qe-fleet[performance]",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/lionagi_qe"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --cov=src/lionagi_qe --cov-report=html --cov-report=term"
+
+[tool.black]
+line-length = 88
+target-version = ['py310']
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
