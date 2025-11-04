@@ -327,7 +327,121 @@ Focus on preventing integration failures and ensuring smooth API evolution."""
 
 
 # ============================================================================
-# Agent Execute Function (Placeholder)
+# Agent Implementation
+# ============================================================================
+
+from lionagi_qe.core.base_agent import BaseQEAgent
+from lionagi_qe.core.task import QETask
+
+
+class APIContractValidatorAgent(BaseQEAgent):
+    """API Contract Validator Agent
+
+    Validates API contracts, detects breaking changes, and ensures backward
+    compatibility across services, preventing 95% of API breaking changes.
+
+    Capabilities:
+    - Schema validation against OpenAPI, GraphQL, JSON Schema
+    - Breaking change detection between API versions
+    - Version compatibility and semantic versioning validation
+    - Contract diffing with visual representation
+    - Consumer impact analysis
+    - Contract-first testing with Pact integration
+    """
+
+    def get_system_prompt(self) -> str:
+        """Define agent expertise"""
+        return API_CONTRACT_VALIDATOR_PROMPT
+
+    async def execute(self, task: QETask) -> APIContractValidatorResult:
+        """Execute API contract validation
+
+        Args:
+            task: Task containing:
+                - baseline_schema: Baseline API schema (OpenAPI, GraphQL)
+                - candidate_schema: New API schema to validate (optional)
+                - consumers: List of API consumers with usage patterns (optional)
+                - current_version: Current API version (optional)
+                - proposed_version: Proposed new version (optional)
+
+        Returns:
+            APIContractValidatorResult with validation results
+        """
+        # Extract context
+        context = task.context
+        baseline_schema = context.get("baseline_schema", "")
+        candidate_schema = context.get("candidate_schema")
+        consumers = context.get("consumers", [])
+        current_version = context.get("current_version")
+        proposed_version = context.get("proposed_version")
+
+        # Retrieve validation history from memory
+        validation_history = await self.get_memory(
+            "aqe/api/validation-history",
+            default=[]
+        )
+
+        # Use LionAGI to perform contract validation
+        result = await self.operate(
+            instruction=f"""Validate API contract and detect breaking changes.
+
+            Baseline Schema:
+            ```
+            {baseline_schema}
+            ```
+
+            {f'''Candidate Schema:
+            ```
+            {candidate_schema}
+            ```
+            ''' if candidate_schema else ''}
+
+            {f'Current Version: {current_version}' if current_version else ''}
+            {f'Proposed Version: {proposed_version}' if proposed_version else ''}
+            {f'Consumer Count: {len(consumers)}' if consumers else ''}
+
+            Requirements:
+            1. Validate schema structure and compliance (OpenAPI/GraphQL)
+            2. Detect breaking changes between baseline and candidate
+            3. Categorize changes by severity (CRITICAL, HIGH, MEDIUM, LOW)
+            4. Analyze consumer impact for each breaking change
+            5. Validate semantic versioning compliance
+            6. Generate contract diff visualization
+            7. Provide deployment recommendation (ALLOW/BLOCK/COORDINATE)
+
+            Use validation history for pattern recognition:
+            {validation_history[:5] if validation_history else "No history available"}
+            """,
+            response_format=APIContractValidatorResult,
+        )
+
+        # Store validation result in memory
+        await self.store_memory(
+            "aqe/api/contracts/latest",
+            result.model_dump(),
+        )
+
+        # Update validation history
+        baseline_excerpt = str(baseline_schema)[:100] if baseline_schema else ""
+        validation_history.append({
+            "timestamp": datetime.now().isoformat(),
+            "baseline": baseline_excerpt,  # Store excerpt
+            "breaking_changes": len(result.breaking_changes.breaking_changes) if result.breaking_changes else 0,
+            "recommendation": result.recommendation,
+        })
+        await self.store_memory(
+            "aqe/api/validation-history",
+            validation_history[-50:],  # Keep last 50 validations
+        )
+
+        # Call post execution hook to update metrics
+        await self.post_execution_hook(task, result.model_dump())
+
+        return result
+
+
+# ============================================================================
+# Placeholder Function (For Backward Compatibility)
 # ============================================================================
 
 def execute(

@@ -15,7 +15,7 @@ Capabilities:
 """
 
 from pydantic import BaseModel, Field
-from typing import List, Dict, Optional, Literal
+from typing import List, Dict, Optional, Literal, Any
 from datetime import datetime
 
 
@@ -414,7 +414,176 @@ Focus on building developer trust through reliable, consistent test results."""
 
 
 # ============================================================================
-# Agent Execute Function (Placeholder)
+# Agent Implementation
+# ============================================================================
+
+from lionagi_qe.core.base_agent import BaseQEAgent
+from lionagi_qe.core.task import QETask
+
+
+class FlakyTestHunterAgent(BaseQEAgent):
+    """Flaky Test Hunter Agent
+
+    Detects, analyzes, and stabilizes flaky tests through pattern recognition
+    and auto-remediation, achieving 95%+ test reliability.
+
+    Capabilities:
+    - Flaky detection using statistical analysis
+    - Root cause analysis with ML-powered diagnosis
+    - Auto-stabilization applying common fixes
+    - Quarantine management for flaky tests
+    - Trend tracking over time
+    - Reliability scoring for all tests
+    - Predictive flakiness detection
+    """
+
+    def get_system_prompt(self) -> str:
+        """Define agent expertise"""
+        return FLAKY_TEST_HUNTER_PROMPT
+
+    async def execute(self, task: QETask) -> FlakyTestHunterResult:
+        """Execute flaky test detection and analysis
+
+        Args:
+            task: Task containing:
+                - test_results: Historical test execution results
+                - min_runs: Minimum runs required for detection (default: 10)
+                - auto_fix: Whether to attempt auto-stabilization (default: False)
+                - auto_quarantine: Whether to auto-quarantine flaky tests (default: True)
+                - target_reliability: Target reliability percentage (default: 0.95)
+
+        Returns:
+            FlakyTestHunterResult with detection and analysis
+        """
+        # Extract context
+        context = task.context
+        test_results = context.get("test_results", [])
+        min_runs = context.get("min_runs", 10)
+        auto_fix = context.get("auto_fix", False)
+        auto_quarantine = context.get("auto_quarantine", True)
+        target_reliability = context.get("target_reliability", 0.95)
+
+        # Retrieve flaky test history from memory
+        flaky_history = await self.get_memory(
+            "aqe/flaky-tests/history",
+            default=[]
+        )
+
+        # Retrieve test stability data
+        stability_data = await self.get_memory(
+            "aqe/test-stability/scores",
+            default={}
+        )
+
+        # Retrieve quarantined tests
+        quarantined = await self.get_memory(
+            "aqe/flaky-tests/quarantined",
+            default=[]
+        )
+
+        # Use LionAGI to perform flaky test detection
+        result = await self.operate(
+            instruction=f"""Detect and analyze flaky tests using statistical analysis and pattern recognition.
+
+            Test Results (Last {len(test_results)} runs):
+            ```json
+            {str(test_results)[:2000]}
+            ```
+
+            Configuration:
+            - Minimum Runs: {min_runs} (for statistical validity)
+            - Auto-Fix: {auto_fix}
+            - Auto-Quarantine: {auto_quarantine}
+            - Target Reliability: {target_reliability * 100}%
+
+            Requirements:
+            1. Calculate flakiness scores for all tests using:
+               - Inconsistency rate (result changes)
+               - Volatility (neither always passing nor failing)
+               - Recency weighting (recent flakes weighted more)
+               - Environmental sensitivity
+            2. Detect flakiness patterns: random, timing, environmental, data, order
+            3. Perform root cause analysis:
+               - RACE_CONDITION: Missing await, unawaited promises
+               - TIMEOUT: Insufficient timeouts
+               - NETWORK_FLAKE: Network instability
+               - DATA_DEPENDENCY: Shared state issues
+               - ORDER_DEPENDENCY: Test ordering problems
+            4. Suggest fixes with effectiveness estimates
+            5. Calculate reliability scores (A-F grades)
+            6. Predict future flakiness risk
+            7. Generate quarantine recommendations
+
+            Historical Data (for pattern learning):
+            {flaky_history[:10] if flaky_history else "No history available"}
+
+            Stability Scores:
+            {str(stability_data)[:500] if stability_data else "No stability data"}
+
+            Currently Quarantined ({len(quarantined)} tests):
+            {[q.get("test_name") for q in quarantined[:5]] if quarantined else "None"}
+
+            Performance Targets:
+            - 95%+ test reliability
+            - 98% detection accuracy
+            - <2% false negative rate
+            - 65% auto-fix success rate
+            """,
+            response_format=FlakyTestHunterResult,
+        )
+
+        # Store detection result in memory
+        await self.store_memory(
+            "aqe/flaky-tests/latest-detection",
+            result.model_dump(),
+        )
+
+        # Update flaky test history
+        flaky_history.append({
+            "timestamp": datetime.now().isoformat(),
+            "flaky_tests": result.detection.flaky_tests,
+            "flakiness_rate": result.detection.flakiness_rate,
+            "target_reliability": target_reliability,
+        })
+        await self.store_memory(
+            "aqe/flaky-tests/history",
+            flaky_history[-100:],  # Keep last 100 detections
+        )
+
+        # Update stability scores for all tests
+        for flaky_test in result.detection.top_flaky_tests:
+            stability_data[flaky_test.test_name] = {
+                "flakiness_score": flaky_test.flakiness_score,
+                "severity": flaky_test.severity,
+                "failure_rate": flaky_test.failure_rate,
+                "last_updated": datetime.now().isoformat(),
+            }
+        await self.store_memory(
+            "aqe/test-stability/scores",
+            stability_data,
+        )
+
+        # Update quarantined tests list
+        if auto_quarantine:
+            for flaky_test in result.detection.top_flaky_tests:
+                if flaky_test.status == "QUARANTINED":
+                    quarantined.append({
+                        "test_name": flaky_test.test_name,
+                        "quarantined_at": flaky_test.quarantined_at.isoformat() if flaky_test.quarantined_at else datetime.now().isoformat(),
+                        "severity": flaky_test.severity,
+                        "flakiness_score": flaky_test.flakiness_score,
+                        "assigned_to": flaky_test.assigned_to,
+                    })
+            await self.store_memory(
+                "aqe/flaky-tests/quarantined",
+                quarantined,
+            )
+
+        return result
+
+
+# ============================================================================
+# Placeholder Function (For Backward Compatibility)
 # ============================================================================
 
 def execute(

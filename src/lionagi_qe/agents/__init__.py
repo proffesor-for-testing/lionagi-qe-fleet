@@ -6,7 +6,7 @@ from .test_executor import TestExecutorAgent
 from .coverage_analyzer import CoverageAnalyzerAgent
 from .quality_gate import QualityGateAgent
 from .quality_analyzer import QualityAnalyzerAgent
-from .code_complexity import CodeComplexityAgent
+from .code_complexity import CodeComplexityAnalyzerAgent
 
 # Performance & Security (2 agents)
 from .performance_tester import PerformanceTesterAgent
@@ -18,6 +18,7 @@ from .production_intelligence import ProductionIntelligenceAgent
 from .fleet_commander import FleetCommanderAgent
 
 # Advanced Testing (4 agents)
+# NOTE: These agents have been fully implemented
 from .regression_risk_analyzer import RegressionRiskAnalyzerAgent
 from .test_data_architect import TestDataArchitectAgent
 from .api_contract_validator import APIContractValidatorAgent
@@ -35,7 +36,7 @@ __all__ = [
     "CoverageAnalyzerAgent",
     "QualityGateAgent",
     "QualityAnalyzerAgent",
-    "CodeComplexityAgent",
+    "CodeComplexityAnalyzerAgent",
     # Performance & Security
     "PerformanceTesterAgent",
     "SecurityScannerAgent",

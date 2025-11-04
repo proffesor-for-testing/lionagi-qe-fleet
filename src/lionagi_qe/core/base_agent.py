@@ -116,6 +116,46 @@ class BaseQEAgent(ABC):
         self.logger.debug(f"Retrieved context: {key} = {value is not None}")
         return value
 
+    async def get_memory(self, key: str, default: Any = None) -> Any:
+        """Retrieve value from shared memory with default fallback
+
+        This is a convenience method for agents to retrieve values from
+        the shared memory namespace with a default value if the key doesn't exist.
+
+        Args:
+            key: Memory key to retrieve (e.g., "aqe/quality/config")
+            default: Default value to return if key not found
+
+        Returns:
+            Stored value or default
+        """
+        value = await self.memory.retrieve(key)
+        if value is None:
+            value = default
+        self.logger.debug(f"Retrieved memory: {key} = {value is not None}")
+        return value
+
+    async def store_memory(
+        self,
+        key: str,
+        value: Any,
+        ttl: Optional[int] = None,
+        partition: str = "agent_data"
+    ):
+        """Store value in shared memory
+
+        This is a convenience method for agents to store values in
+        the shared memory namespace without the aqe/{agent_id}/ prefix.
+
+        Args:
+            key: Memory key (e.g., "aqe/coverage/gaps")
+            value: Value to store
+            ttl: Time-to-live in seconds
+            partition: Memory partition
+        """
+        await self.memory.store(key, value, ttl=ttl, partition=partition)
+        self.logger.debug(f"Stored memory: {key}")
+
     async def search_memory(self, pattern: str) -> Dict[str, Any]:
         """Search memory using regex pattern
 

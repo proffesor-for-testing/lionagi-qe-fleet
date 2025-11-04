@@ -80,3 +80,7 @@ dmypy.json
 
 # Cython
 cython_debug/
+.agentic-qe/
+.claude/
+.claude-flow/
+.swarm/

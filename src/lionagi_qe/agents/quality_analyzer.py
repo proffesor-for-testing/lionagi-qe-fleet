@@ -356,4 +356,7 @@ Output Format:
                 },
             )
 
+        # Call post execution hook to update metrics
+        await self.post_execution_hook(task, result.model_dump())
+
         return result
