@@ -291,7 +291,149 @@ Focus on eliminating manual data creation and ensuring data quality through auto
 
 
 # ============================================================================
-# Agent Execute Function (Placeholder)
+# Agent Implementation
+# ============================================================================
+
+from lionagi_qe.core.base_agent import BaseQEAgent
+from lionagi_qe.core.task import QETask
+
+
+class TestDataArchitectAgent(BaseQEAgent):
+    """Test Data Architect Agent
+
+    Generates realistic, schema-aware test data with relationship preservation
+    and edge case coverage, eliminating manual test data creation.
+
+    Capabilities:
+    - Schema-aware generation from SQL, GraphQL, TypeScript, JSON Schema
+    - Relationship preservation maintaining referential integrity
+    - Edge case data covering boundary values and special cases
+    - Data anonymization for GDPR/HIPAA compliance
+    - Realistic data synthesis matching production patterns
+    - Constraint validation (NOT NULL, UNIQUE, CHECK, FK)
+    - Data versioning aligned with schema versions
+    """
+
+    def get_system_prompt(self) -> str:
+        """Define agent expertise"""
+        return TEST_DATA_ARCHITECT_PROMPT
+
+    async def execute(self, task: QETask) -> TestDataArchitectResult:
+        """Execute test data generation from schema
+
+        Args:
+            task: Task containing:
+                - schema_source: Schema definition (SQL DDL, GraphQL, JSON Schema)
+                - record_count: Number of records to generate per entity (default: 100)
+                - include_edge_cases: Whether to include edge case data (default: True)
+                - anonymize: Whether to anonymize generated data (default: False)
+                - schema_version: Schema version for data versioning (optional)
+                - compliance_standard: GDPR/HIPAA/CCPA (optional)
+
+        Returns:
+            TestDataArchitectResult with generated datasets
+        """
+        # Extract context
+        context = task.context
+        schema_source = context.get("schema_source", "")
+        record_count = context.get("record_count", 100)
+        include_edge_cases = context.get("include_edge_cases", True)
+        anonymize = context.get("anonymize", False)
+        schema_version = context.get("schema_version", "1.0.0")
+        compliance_standard = context.get("compliance_standard", "GDPR")
+
+        # Retrieve schema history from memory
+        schema_history = await self.get_memory(
+            "aqe/test-data/schema-history",
+            default=[]
+        )
+
+        # Retrieve previously generated data patterns
+        data_patterns = await self.get_memory(
+            "aqe/test-data/patterns",
+            default={}
+        )
+
+        # Use LionAGI to perform test data generation
+        result = await self.operate(
+            instruction=f"""Generate realistic, schema-aware test data with comprehensive validation.
+
+            Schema Source:
+            ```
+            {schema_source}
+            ```
+
+            Configuration:
+            - Record Count: {record_count} per entity
+            - Include Edge Cases: {include_edge_cases}
+            - Anonymize: {anonymize}
+            - Schema Version: {schema_version}
+            - Compliance Standard: {compliance_standard}
+
+            Requirements:
+            1. Parse schema and extract entities, fields, relationships
+            2. Generate realistic data matching field semantics (email, phone, name, etc.)
+            3. Preserve referential integrity (all foreign keys valid)
+            4. Include edge cases (empty, min, max, special chars, unicode)
+            5. Validate all constraints (NOT NULL, UNIQUE, CHECK, FK)
+            6. Apply anonymization strategies if requested
+            7. Version the dataset with checksum
+            8. Report generation statistics (records/sec, compliance rate)
+
+            Data Patterns (for realistic synthesis):
+            {str(data_patterns)[:500] if data_patterns else "No patterns available"}
+
+            Schema History (for relationship inference):
+            {schema_history[:3] if schema_history else "No history available"}
+
+            Performance Targets:
+            - 10,000+ records/second generation speed
+            - 100% constraint compliance
+            - 95%+ edge case coverage
+            - 100% referential integrity
+            """,
+            response_format=TestDataArchitectResult,
+        )
+
+        # Store generated dataset in memory
+        await self.store_memory(
+            f"aqe/test-data/datasets/{schema_version}",
+            result.model_dump(),
+        )
+
+        # Update schema history
+        schema_history.append({
+            "schema_version": schema_version,
+            "timestamp": datetime.now().isoformat(),
+            "entity_count": len(result.schema_analysis.entities),
+            "total_records": result.generated_dataset.total_records,
+        })
+        await self.store_memory(
+            "aqe/test-data/schema-history",
+            schema_history[-20:],  # Keep last 20 schema versions
+        )
+
+        # Store data patterns for future synthesis
+        for entity in result.schema_analysis.entities:
+            if entity.name not in data_patterns:
+                data_patterns[entity.name] = {
+                    "fields": [f.name for f in entity.fields],
+                    "generators": [f.generator for f in entity.fields],
+                    "generation_count": 1,
+                }
+            else:
+                data_patterns[entity.name]["generation_count"] += 1
+
+        await self.store_memory(
+            "aqe/test-data/patterns",
+            data_patterns,
+        )
+
+        return result
+
+
+# ============================================================================
+# Placeholder Function (For Backward Compatibility)
 # ============================================================================
 
 def execute(

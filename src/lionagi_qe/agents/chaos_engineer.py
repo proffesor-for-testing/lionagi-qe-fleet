@@ -217,7 +217,7 @@ class ChaosEngineerAgent(BaseQEAgent):
 - Target: {fault_config.get('target', 'unknown')}
 - Intensity: {fault_config.get('intensity', 'gradual')}
 - Duration: {fault_config.get('duration', '5m')}
-- Parameters: {fault_config.get('parameters', {{}})}
+- Parameters: {fault_config.get('parameters', {})}
 
 **Blast Radius Limits:**
 - Max Services: {blast_radius_limits.get('max_services', 1)}
