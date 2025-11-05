@@ -9,16 +9,15 @@
 
 **Agentic Quality Engineering powered by LionAGI**
 
-A Python reimplementation of the Agentic QE Fleet using LionAGI as the orchestration framework. This fleet provides 19 specialized AI agents for comprehensive software testing and quality assurance.
+A Python reimplementation of the Agentic QE Fleet using LionAGI as the orchestration framework. This fleet provides 18 specialized AI agents for comprehensive software testing and quality assurance.
 
 ## 🚀 Features
 
 ### Core Capabilities
-- **19 Specialized Agents**: From test generation to deployment readiness
-- **Multi-Model Routing**: 70-81% cost savings through intelligent model selection
-- **Parallel Execution**: Handle 10,000+ concurrent tests (7.5x faster)
-- **Q-Learning Integration**: Continuous improvement from past executions
-- **34 QE Skills**: World-class quality engineering practices
+- **18 Specialized Agents**: From test generation to deployment readiness
+- **Multi-Model Routing**: Intelligent model selection for cost optimization (up to 80% theoretical savings)
+- **Parallel Execution**: Async-first architecture for concurrent test operations
+- **Execution Tracking**: Foundation for continuous improvement and learning
 - **Framework Agnostic**: Works with pytest, Jest, Mocha, Cypress, and more
 
 ### Advanced Features (v1.0.0)
@@ -168,9 +167,6 @@ async def parallel_analysis():
 - **deployment-readiness**: Multi-factor release risk assessment
 - **visual-tester**: AI-powered UI regression detection
 - **chaos-engineer**: Fault injection and resilience testing
-
-### General Purpose (1 agent)
-- **base-template-generator**: Create custom agent definitions
 
 ## 📋 Agent Coordination
 
