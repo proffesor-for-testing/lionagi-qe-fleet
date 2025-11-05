@@ -1,0 +1,138 @@
+version: '3.9'
+
+services:
+  # PostgreSQL 16 - Primary database for Q-Learning
+  postgres:
+    image: postgres:16-alpine
+    container_name: lionagi-qe-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-lionagi_qe_learning}
+      POSTGRES_USER: ${POSTGRES_USER:-qe_agent}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-qe_secure_password_123}
+      POSTGRES_INITDB_ARGS: "-c shared_buffers=256MB -c max_connections=200"
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      - ./postgres/schema.sql:/docker-entrypoint-initdb.d/02-schema.sql:ro
+    networks:
+      - lionagi-qe-network
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-qe_agent} -d ${POSTGRES_DB:-lionagi_qe_learning}"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      - "description=PostgreSQL database for Q-Learning and test artifacts"
+
+  # pgAdmin 4 - Database management UI
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: lionagi-qe-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@lionagi.dev}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin_secure_123}
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 'False'
+      PGADMIN_CONFIG_ENHANCED_COOKIE_PROTECTION: 'False'
+      PGADMIN_CONFIG_COOKIE_DEFAULT_SECURE: 'False'
+      PGADMIN_CONFIG_COOKIE_SAMESITE: 'Lax'
+      SCRIPT_NAME: /pgadmin
+    ports:
+      - "${PGADMIN_PORT:-5050}:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+      - ./pgadmin/servers.json:/pgadmin4/servers.json:ro
+    networks:
+      - lionagi-qe-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost/pgadmin/misc/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      - "description=pgAdmin UI for PostgreSQL database management"
+
+  # Redis - Optional caching layer for Q-values and performance metrics
+  redis:
+    image: redis:7-alpine
+    container_name: lionagi-qe-redis
+    environment:
+      REDIS_ARGS: --requirepass ${REDIS_PASSWORD:-redis_secure_password_123}
+    command:
+      - redis-server
+      - "--appendonly"
+      - "yes"
+      - "--appendfsync"
+      - "everysec"
+      - "--requirepass"
+      - ${REDIS_PASSWORD:-redis_secure_password_123}
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - lionagi-qe-network
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "redis-cli",
+          "-a",
+          "${REDIS_PASSWORD:-redis_secure_password_123}",
+          "ping"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      - "description=Redis cache for Q-values and performance metrics"
+    profiles:
+      - with-redis
+
+volumes:
+  postgres_data:
+    driver: local
+    labels:
+      description: "PostgreSQL data persistence volume"
+  pgadmin_data:
+    driver: local
+    labels:
+      description: "pgAdmin configuration and cache volume"
+  redis_data:
+    driver: local
+    labels:
+      description: "Redis persistence volume"
+
+networks:
+  lionagi-qe-network:
+    driver: bridge
+    labels:
+      description: "Internal network for LionAGI QE Fleet services"

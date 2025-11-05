@@ -1,0 +1,130 @@
+# LionAGI QE Fleet - Q-Learning Configuration for pyproject.toml
+# Add these sections to your pyproject.toml to integrate Q-Learning database
+
+# ============================================================================
+# Optional Dependencies for Q-Learning
+# ============================================================================
+
+# Add to [project.optional-dependencies]
+# qlearning = [
+#     "sqlalchemy>=2.0.0",
+#     "asyncpg>=0.29.0",               # Async PostgreSQL driver
+#     "psycopg2-binary>=2.9.0",        # Sync PostgreSQL driver
+#     "alembic>=1.13.0",               # Database migrations
+#     "redis>=5.0.0",                  # Optional: Redis caching
+# ]
+
+# ============================================================================
+# Tool Configuration
+# ============================================================================
+
+# [tool.sqlalchemy]
+# # SQLAlchemy 2.0 declarative base configuration
+# sqlalchemy-stubs = true
+
+# [tool.alembic]
+# # Database migration tool
+# sqlalchemy.url = "postgresql://qe_agent:qe_secure_password_123@localhost:5432/lionagi_qe_learning"
+# script_location = "alembic"
+# sqlalchemy_module_name = "sqlalchemy"
+# version_path_separator = ":"
+
+# ============================================================================
+# Environment Variable Schema
+# ============================================================================
+
+# [tool.pydantic-settings]
+# # For Pydantic v2 settings management
+# env_file = [".env", "docker/.env"]
+# env_file_encoding = "utf-8"
+# case_sensitive = false
+
+# Example settings class:
+# from pydantic_settings import BaseSettings
+#
+# class DatabaseSettings(BaseSettings):
+#     postgres_host: str = "localhost"
+#     postgres_port: int = 5432
+#     postgres_db: str = "lionagi_qe_learning"
+#     postgres_user: str = "qe_agent"
+#     postgres_password: str = "qe_secure_password_123"
+#     postgres_pool_size: int = 10
+#     postgres_max_overflow: int = 20
+#     postgres_pool_recycle: int = 3600
+#
+#     redis_host: str = "localhost"
+#     redis_port: int = 6379
+#     redis_password: str = "redis_secure_password_123"
+#     redis_db: int = 0
+#
+#     class Config:
+#         env_file = ".env"
+#         env_file_encoding = "utf-8"
+#
+#     @property
+#     def database_url(self) -> str:
+#         return f"postgresql://{self.postgres_user}:{self.postgres_password}@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+#
+#     @property
+#     def async_database_url(self) -> str:
+#         return f"postgresql+asyncpg://{self.postgres_user}:{self.postgres_password}@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+
+
+# ============================================================================
+# Example Complete Configuration
+# ============================================================================
+
+# Below is a complete example of how to structure your pyproject.toml
+# for Q-Learning integration
+
+"""
+[project]
+name = "lionagi-qe-fleet"
+version = "1.0.2"
+description = "Agentic Quality Engineering Fleet with Q-Learning"
+
+dependencies = [
+    "lionagi>=0.18.2",
+    "pydantic>=2.8.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+qlearning = [
+    "sqlalchemy>=2.0.0",
+    "asyncpg>=0.29.0",
+    "psycopg2-binary>=2.9.0",
+    "alembic>=1.13.0",
+]
+
+redis = [
+    "redis>=5.0.0",
+]
+
+dev = [
+    "black>=24.0.0",
+    "ruff>=0.3.0",
+    "mypy>=1.9.0",
+]
+
+all = [
+    "lionagi-qe-fleet[qlearning]",
+    "lionagi-qe-fleet[redis]",
+    "lionagi-qe-fleet[dev]",
+]
+
+[tool.black]
+line-length = 88
+target-version = ['py310']
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+env_file = ["docker/.env"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+"""

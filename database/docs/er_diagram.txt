@@ -1,0 +1,365 @@
+================================================================================
+Agentic QE Fleet - Q-Learning Database ER Diagram
+================================================================================
+Version: 1.0.0
+Generated: 2025-11-05
+
+================================================================================
+Entity Relationship Diagram (Text-Based)
+================================================================================
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        AGENT_TYPES (Registry)                           │
+├─────────────────────────────────────────────────────────────────────────┤
+│ PK: agent_type (VARCHAR)                                                │
+│     - display_name                                                      │
+│     - description                                                       │
+│     - state_space_dimensions                                            │
+│     - action_space_dimensions                                           │
+│     - learning_rate, discount_factor, exploration_rate                  │
+│     - is_active                                                         │
+│     - metadata (JSONB)                                                  │
+└────────────────┬────────────────────────────────────────────────────────┘
+                 │
+                 │ 1:N (one agent type → many sessions)
+                 │
+                 ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        SESSIONS (Execution Groups)                      │
+├─────────────────────────────────────────────────────────────────────────┤
+│ PK: session_id (UUID)                                                   │
+│ FK: agent_type → agent_types.agent_type                                 │
+│     - session_name                                                      │
+│     - start_time, end_time                                              │
+│     - status (active, completed, failed, cancelled)                     │
+│     - task_count, total_reward                                          │
+│     - environment (development, staging, production)                    │
+│     - metadata (JSONB)                                                  │
+└────────┬───────────────────────────────────────────────────────┬────────┘
+         │                                                       │
+         │ 1:N                                                   │ 1:N
+         │                                                       │
+         ▼                                                       ▼
+┌──────────────────────────────────┐    ┌──────────────────────────────────┐
+│      Q_VALUES (Core Learning)    │    │   TRAJECTORIES (Experience)      │
+├──────────────────────────────────┤    ├──────────────────────────────────┤
+│ PK: q_value_id (BIGSERIAL)       │    │ PK: trajectory_id (UUID)         │
+│ FK: agent_type → agent_types     │    │ FK: agent_type → agent_types     │
+│ FK: session_id → sessions        │    │ FK: session_id → sessions        │
+│     - state_hash (SHA256)        │    │     - task_id                    │
+│     - state_data (JSONB)         │    │     - initial_state (JSONB)      │
+│     - action_hash (SHA256)       │    │     - final_state (JSONB)        │
+│     - action_data (JSONB)        │    │     - actions_taken (JSONB[])    │
+│     - q_value (DECIMAL)          │    │     - states_visited (JSONB[])   │
+│     - visit_count                │    │     - step_rewards (JSONB[])     │
+│     - confidence_score           │    │     - total_reward               │
+│     - uncertainty                │    │     - discounted_reward          │
+│     - last_updated               │    │     - execution_time_ms          │
+│     - expires_at (TTL: 30 days)  │    │     - success, error_message     │
+│     - metadata (JSONB)           │    │     - started_at, completed_at   │
+│                                  │    │     - expires_at (TTL: 30 days)  │
+│ UNIQUE: (agent_type, state_hash, │    │     - metadata (JSONB)           │
+│          action_hash)            │    │                                  │
+└──────────────────────────────────┘    └────────┬─────────────────────────┘
+                                                 │
+                                                 │ 1:N
+                                                 │
+                                                 ▼
+                                    ┌──────────────────────────────────┐
+                                    │   REWARDS (Granular Tracking)    │
+                                    ├──────────────────────────────────┤
+                                    │ PK: reward_id (BIGSERIAL)        │
+                                    │ FK: agent_type → agent_types     │
+                                    │ FK: session_id → sessions        │
+                                    │ FK: trajectory_id → trajectories │
+                                    │     - state_hash                 │
+                                    │     - action_hash                │
+                                    │     - reward_value               │
+                                    │     - reward_type (immediate,    │
+                                    │       delayed, terminal)         │
+                                    │     - reward_source              │
+                                    │     - observed_at                │
+                                    │     - metadata (JSONB)           │
+                                    └──────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                     PATTERNS (Learned Strategies)                       │
+├─────────────────────────────────────────────────────────────────────────┤
+│ PK: pattern_id (UUID)                                                   │
+│ FK: agent_type → agent_types.agent_type                                 │
+│ FK: parent_pattern_id → patterns.pattern_id (self-reference)            │
+│     - pattern_name                                                      │
+│     - pattern_type (test_template, coverage_strategy, quality_rule...)  │
+│     - pattern_category                                                  │
+│     - pattern_data (JSONB) - core pattern definition                    │
+│     - trigger_conditions (JSONB) - when to apply                        │
+│     - expected_outcome (JSONB) - expected results                       │
+│     - usage_count, success_count, failure_count                         │
+│     - avg_reward, confidence_score                                      │
+│     - first_seen, last_used, expires_at (TTL: 30 days)                  │
+│     - version (for pattern evolution)                                   │
+│     - metadata (JSONB)                                                  │
+│                                                                         │
+│ UNIQUE: (agent_type, pattern_name, version)                            │
+└─────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                  AGENT_STATES (Current Learning State)                  │
+├─────────────────────────────────────────────────────────────────────────┤
+│ PK: state_id (UUID)                                                     │
+│ FK: agent_type → agent_types.agent_type                                 │
+│     - agent_instance_id (e.g., "test-generator-1")                      │
+│     - total_tasks, successful_tasks, failed_tasks                       │
+│     - total_reward, avg_reward                                          │
+│     - current_exploration_rate                                          │
+│     - current_learning_rate                                             │
+│     - success_rate (COMPUTED: successful / total)                       │
+│     - patterns_learned, q_values_stored                                 │
+│     - status (idle, active, learning, paused, error)                    │
+│     - last_activity, initialized_at, updated_at                         │
+│     - metadata (JSONB)                                                  │
+│                                                                         │
+│ UNIQUE: (agent_type, agent_instance_id)                                │
+└─────────────────────────────────────────────────────────────────────────┘
+
+================================================================================
+Materialized Views (Performance Optimization)
+================================================================================
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│            AGENT_PERFORMANCE_SUMMARY (Materialized View)                │
+├─────────────────────────────────────────────────────────────────────────┤
+│ Aggregates per agent_type:                                             │
+│   - total_sessions, total_trajectories                                  │
+│   - successful_trajectories, avg_reward, cumulative_reward              │
+│   - avg_execution_time_ms                                               │
+│   - unique_patterns, avg_state_visits                                   │
+│   - last_active, active_instances                                       │
+│                                                                         │
+│ Refresh: Hourly (CONCURRENTLY)                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│             PATTERN_EFFECTIVENESS (Materialized View)                   │
+├─────────────────────────────────────────────────────────────────────────┤
+│ Analyzes per pattern:                                                   │
+│   - usage_count, success_count, failure_count, success_rate             │
+│   - avg_reward, confidence_score                                        │
+│   - trajectories_using_pattern, avg_trajectory_reward                   │
+│   - last_used, days_since_used                                          │
+│                                                                         │
+│ Refresh: Hourly (CONCURRENTLY)                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+
+================================================================================
+Key Relationships Summary
+================================================================================
+
+1. agent_types → sessions (1:N)
+   - One agent type has many execution sessions
+
+2. sessions → q_values (1:N)
+   - One session contains many Q-value updates
+
+3. sessions → trajectories (1:N)
+   - One session contains many execution trajectories
+
+4. trajectories → rewards (1:N)
+   - One trajectory contains many reward observations
+
+5. agent_types → patterns (1:N)
+   - One agent type learns many patterns
+
+6. patterns → patterns (self-reference, 1:N)
+   - Patterns can evolve from parent patterns (versioning)
+
+7. agent_types → agent_states (1:N)
+   - One agent type can have multiple active instances
+
+================================================================================
+Index Strategy
+================================================================================
+
+PRIMARY INDEXES (Fast Lookups):
+  - q_values: (agent_type, state_hash) → O(1) Q-value lookup
+  - q_values: (agent_type, state_hash, action_hash) → Unique constraint
+  - trajectories: (agent_type), (session_id), (task_id)
+  - patterns: (agent_type, pattern_name, version) → Unique constraint
+
+PERFORMANCE INDEXES:
+  - q_values: (agent_type, state_hash, q_value DESC) → Best action selection
+  - patterns: (agent_type, avg_reward DESC) → Top patterns
+  - trajectories: (total_reward DESC) → Best trajectories
+
+GIN INDEXES (JSONB Search):
+  - q_values: state_data, action_data
+  - sessions: metadata
+  - patterns: pattern_data, trigger_conditions
+  - trajectories: (implicit via metadata)
+
+PARTIAL INDEXES:
+  - sessions: WHERE status = 'active' (hot sessions)
+  - q_values: WHERE expires_at IS NOT NULL (TTL enforcement)
+
+TRIGRAM INDEXES (Fuzzy Search):
+  - patterns: pattern_name (similarity search)
+
+================================================================================
+Concurrency Control
+================================================================================
+
+OPTIMISTIC LOCKING:
+  - Q-values: UPSERT with visit_count increment
+  - No explicit row locks for reads (MVCC handles isolation)
+
+CONFLICT RESOLUTION:
+  - q_values: ON CONFLICT → UPDATE (merge Q-value, increment visits)
+  - patterns: ON CONFLICT → version increment
+
+DEADLOCK PREVENTION:
+  - Consistent ordering: agent_type → session → trajectory → reward
+  - Short transactions (< 100ms typical)
+  - Row-level locking only during updates
+
+================================================================================
+Data Retention (TTL)
+================================================================================
+
+DEFAULT POLICY: 30 days for all tables
+  - q_values.expires_at = NOW() + INTERVAL '30 days'
+  - trajectories.expires_at = NOW() + INTERVAL '30 days'
+  - patterns.expires_at = NOW() + INTERVAL '30 days'
+
+CLEANUP:
+  - Function: cleanup_expired_data() (cron: daily 2am)
+  - Batch delete: WHERE expires_at < NOW()
+
+ARCHIVAL (Optional):
+  - Export expired data to S3/cold storage before deletion
+  - Keep aggregated statistics in materialized views
+
+================================================================================
+Scalability Considerations
+================================================================================
+
+PARTITIONING (Future):
+  - trajectories: PARTITION BY RANGE (completed_at)
+    → Monthly partitions for efficient archival
+
+SHARDING (Future):
+  - Shard by agent_type for horizontal scaling
+  - 18 agent types = up to 18 shards
+
+CONNECTION POOLING:
+  - PgBouncer: 100 connections → 10 PostgreSQL connections
+  - Each agent instance: dedicated connection from pool
+
+REPLICATION:
+  - Read replicas for analytics queries
+  - Write to primary for Q-value updates
+
+================================================================================
+Storage Estimates (30 Days)
+================================================================================
+
+ASSUMPTIONS:
+  - 18 agent types
+  - Each agent: 100 tasks/day
+  - Average trajectory: 10 states, 10 actions
+  - Average Q-values per agent: 1000 unique state-action pairs
+  - Pattern growth: 50 patterns per agent (cumulative)
+
+CALCULATIONS:
+
+q_values:
+  - 18 agents × 1000 pairs = 18,000 rows
+  - Row size: ~500 bytes (state_data, action_data as JSONB)
+  - Total: 18,000 × 500 = 9 MB
+  - With indexes: ~27 MB
+
+trajectories:
+  - 18 agents × 100 tasks/day × 30 days = 54,000 rows
+  - Row size: ~2 KB (states_visited, actions_taken arrays)
+  - Total: 54,000 × 2KB = 108 MB
+  - With indexes: ~320 MB
+
+rewards:
+  - 54,000 trajectories × 10 rewards/trajectory = 540,000 rows
+  - Row size: ~200 bytes
+  - Total: 540,000 × 200 = 108 MB
+  - With indexes: ~320 MB
+
+patterns:
+  - 18 agents × 50 patterns = 900 rows
+  - Row size: ~1 KB (pattern_data JSONB)
+  - Total: 900 × 1KB = 0.9 MB
+  - With indexes: ~3 MB
+
+sessions:
+  - 18 agents × 100 tasks/day × 30 days / 10 tasks per session = 5,400 rows
+  - Row size: ~300 bytes
+  - Total: 5,400 × 300 = 1.6 MB
+  - With indexes: ~5 MB
+
+agent_states:
+  - 18 agents × 2 instances each = 36 rows
+  - Row size: ~500 bytes
+  - Total: 36 × 500 = 18 KB
+  - With indexes: ~100 KB
+
+agent_types:
+  - 18 rows (static)
+  - Total: ~10 KB
+
+TOTAL STORAGE (30 days):
+  - Tables: 227.5 MB
+  - Indexes: 675 MB
+  - Total: ~900 MB (< 1 GB)
+
+GROWTH RATE:
+  - Per day: ~30 MB (primarily trajectories)
+  - Per year (without TTL): ~11 GB
+  - With 30-day TTL: stable at ~1 GB
+
+PRODUCTION RECOMMENDATIONS:
+  - Provision: 10 GB (10x overhead for safety)
+  - PostgreSQL shared_buffers: 2 GB (caches hot Q-values)
+  - Monitor: pg_stat_user_tables for actual sizes
+
+================================================================================
+Performance Benchmarks (Expected)
+================================================================================
+
+Q-VALUE LOOKUP (get_best_action):
+  - Cold cache: <5ms
+  - Hot cache: <1ms
+  - Throughput: 10,000+ lookups/sec
+
+Q-VALUE UPDATE (upsert_q_value):
+  - Single update: <2ms
+  - Batch update (100 values): <50ms
+  - Throughput: 5,000+ updates/sec
+
+TRAJECTORY INSERT:
+  - Single insert: <3ms
+  - Batch insert (10 trajectories): <30ms
+  - Throughput: 3,000+ inserts/sec
+
+PATTERN SEARCH:
+  - Fuzzy search by name: <10ms
+  - Filtered by avg_reward: <5ms
+  - Throughput: 2,000+ queries/sec
+
+CONCURRENT AGENTS:
+  - 18 agents writing simultaneously: No contention
+  - State-action pairs are unique per agent
+  - Sessions provide isolation
+
+MATERIALIZED VIEW REFRESH:
+  - agent_performance_summary: <1 second
+  - pattern_effectiveness: <2 seconds
+  - Schedule: Every hour (low impact)
+
+================================================================================
+End of ER Diagram
+================================================================================

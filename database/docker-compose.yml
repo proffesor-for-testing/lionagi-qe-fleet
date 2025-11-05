@@ -1,0 +1,167 @@
+version: '3.8'
+
+services:
+  # PostgreSQL database
+  postgres:
+    image: postgres:15-alpine
+    container_name: qlearning-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: qlearning_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./schema/qlearning_schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./init/seed_data.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
+    command: >
+      postgres
+      -c shared_buffers=2GB
+      -c effective_cache_size=6GB
+      -c maintenance_work_mem=512MB
+      -c work_mem=64MB
+      -c wal_buffers=16MB
+      -c checkpoint_completion_target=0.9
+      -c max_wal_size=4GB
+      -c min_wal_size=1GB
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
+      -c max_worker_processes=8
+      -c max_parallel_workers_per_gather=4
+      -c max_parallel_workers=8
+      -c autovacuum_vacuum_scale_factor=0.05
+      -c autovacuum_analyze_scale_factor=0.025
+      -c shared_preload_libraries=pg_stat_statements
+      -c pg_stat_statements.track=all
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - qlearning-network
+
+  # PgBouncer connection pooler
+  pgbouncer:
+    image: edoburu/pgbouncer:1.21-alpine
+    container_name: qlearning-pgbouncer
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: "postgres://postgres:${POSTGRES_PASSWORD:-changeme}@postgres:5432/qlearning_db"
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: 200
+      DEFAULT_POOL_SIZE: 20
+      RESERVE_POOL_SIZE: 5
+      SERVER_IDLE_TIMEOUT: 600
+      SERVER_LIFETIME: 3600
+    ports:
+      - "6432:5432"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - qlearning-network
+
+  # Redis cache (optional, for Q-value caching)
+  redis:
+    image: redis:7-alpine
+    container_name: qlearning-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: >
+      redis-server
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --save 60 1000
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - qlearning-network
+
+  # pgAdmin web UI (optional, for database management)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: qlearning-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@qlearning.local}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 'False'
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - postgres
+    networks:
+      - qlearning-network
+    profiles:
+      - tools  # Only start with: docker-compose --profile tools up
+
+  # Prometheus metrics (optional, for monitoring)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: qlearning-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+    networks:
+      - qlearning-network
+    profiles:
+      - monitoring
+
+  # Grafana dashboards (optional, for visualization)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: qlearning-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_INSTALL_PLUGINS: grafana-piechart-panel
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    depends_on:
+      - prometheus
+    networks:
+      - qlearning-network
+    profiles:
+      - monitoring
+
+volumes:
+  postgres_data:
+    name: qlearning_postgres_data
+  redis_data:
+    name: qlearning_redis_data
+  pgadmin_data:
+    name: qlearning_pgadmin_data
+  prometheus_data:
+    name: qlearning_prometheus_data
+  grafana_data:
+    name: qlearning_grafana_data
+
+networks:
+  qlearning-network:
+    name: qlearning-network
+    driver: bridge

@@ -1,0 +1,47 @@
+version: '3.9'
+
+# This file is automatically loaded by Docker Compose for local development
+# It overrides settings in docker-compose.yml for development convenience
+# For production use, use: docker-compose -f docker-compose.yml
+
+services:
+  postgres:
+    # More verbose logging for development
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+    # Bind mount for development schema changes
+    volumes:
+      - ./postgres/dev-schema.sql:/docker-entrypoint-initdb.d/03-dev-schema.sql:ro
+
+  pgadmin:
+    environment:
+      # Enable development features
+      PGADMIN_CONFIG_ENHANCED_COOKIE_PROTECTION: 'False'
+      PGADMIN_CONFIG_CONSOLE_LOG_LEVEL: '10'  # DEBUG level
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  redis:
+    profiles:
+      - with-redis
+    command:
+      - redis-server
+      - "--loglevel"
+      - "verbose"
+      - "--appendonly"
+      - "yes"
+      - "--appendfsync"
+      - "everysec"
+      - "--requirepass"
+      - ${REDIS_PASSWORD:-redis_secure_password_123}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"

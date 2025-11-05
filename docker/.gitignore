@@ -1,0 +1,46 @@
+# Environment Configuration
+.env
+.env.local
+.env.*.local
+
+# Backups
+backup*.sql
+backup*.sql.gz
+schema*.sql
+data*.sql
+
+# Docker volumes (not tracked, data stored locally)
+# These are created by docker-compose
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+.tmp/
+
+# OS files
+Thumbs.db
+.AppleDouble
+.LSOverride
+
+# pgAdmin backup files (if exported)
+pgadmin_backup/
+*.backup

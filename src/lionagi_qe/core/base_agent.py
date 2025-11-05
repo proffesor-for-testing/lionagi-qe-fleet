@@ -1,11 +1,13 @@
 """Base class for all QE agents"""
 
 from abc import ABC, abstractmethod
-from typing import Dict, Any, List, Optional, Type, TypeVar, Union
+from typing import Dict, Any, List, Optional, Type, TypeVar, Union, Tuple
 from lionagi import Branch, iModel
 from .task import QETask
 from .memory import QEMemory
 import logging
+import hashlib
+import json
 
 # Generic type for Pydantic models
 try:
@@ -25,6 +27,17 @@ except ImportError:
     FUZZY_PARSING_AVAILABLE = False
     fuzzy_json = None
     fuzzy_validate_pydantic = None
+
+# Import Q-Learning components (optional, graceful fallback)
+try:
+    from lionagi_qe.learning import QLearningService, StateEncoder, RewardCalculator
+    QLEARNING_AVAILABLE = True
+except ImportError:
+    # Q-Learning not yet implemented - graceful fallback
+    QLEARNING_AVAILABLE = False
+    QLearningService = None
+    StateEncoder = None
+    RewardCalculator = None
 
 
 class BaseQEAgent(ABC):
@@ -47,7 +60,8 @@ class BaseQEAgent(ABC):
         model: iModel,
         memory: QEMemory,
         skills: Optional[List[str]] = None,
-        enable_learning: bool = False
+        enable_learning: bool = False,
+        q_learning_service: Optional['QLearningService'] = None
     ):
         """Initialize QE agent
 
@@ -57,12 +71,18 @@ class BaseQEAgent(ABC):
             memory: Shared QE memory instance
             skills: List of QE skills this agent uses
             enable_learning: Enable Q-learning integration
+            q_learning_service: Optional Q-learning service instance
         """
         self.agent_id = agent_id
         self.model = model
         self.memory = memory
         self.skills = skills or []
         self.enable_learning = enable_learning
+
+        # Q-Learning integration
+        self.q_service = q_learning_service if QLEARNING_AVAILABLE else None
+        self.current_state_hash: Optional[str] = None
+        self.current_action_id: Optional[str] = None
 
         # Initialize LionAGI branch for conversations
         self.branch = Branch(
@@ -80,6 +100,9 @@ class BaseQEAgent(ABC):
             "tasks_failed": 0,
             "total_cost": 0.0,
             "patterns_learned": 0,
+            "total_reward": 0.0,
+            "avg_reward": 0.0,
+            "learning_episodes": 0,
         }
 
     @abstractmethod
@@ -276,26 +299,446 @@ class BaseQEAgent(ABC):
         task: QETask,
         result: Dict[str, Any]
     ):
-        """Q-learning integration (simplified)
+        """Learn from task execution using Q-learning
+
+        This method implements the full Q-learning update cycle:
+        1. Encode current state from task context
+        2. Calculate reward based on task result
+        3. Encode next state (terminal or from result)
+        4. Update Q-value using Bellman equation: Q(s,a) ← Q(s,a) + α[r + γ max Q(s',a') - Q(s,a)]
+        5. Store trajectory (SARS') in database for experience replay
+        6. Decay epsilon for exploration-exploitation balance
+
+        Flow:
+            Task execution → State encoding → Reward calculation →
+            Next state encoding → Q-value update → Trajectory storage → Epsilon decay
+
+        Args:
+            task: Completed task with context
+            result: Execution result containing outcome metrics
+        """
+        if not self.enable_learning:
+            self.logger.debug("Learning disabled, skipping Q-learning update")
+            return
+
+        if not QLEARNING_AVAILABLE:
+            # Q-Learning module not yet available - store trajectories only
+            self.logger.debug("Q-Learning module not available, storing trajectory for future use")
+            trajectory = {
+                "task_type": task.task_type,
+                "context": task.context,
+                "result": result,
+                "success": result.get("success", True),
+                "timestamp": result.get("timestamp", None),
+            }
+            await self.store_result(
+                f"learning/trajectories/{task.task_id}",
+                trajectory,
+                ttl=2592000,  # 30 days
+                partition="learning"
+            )
+            return
+
+        if not self.q_service:
+            self.logger.warning("Q-learning enabled but service not initialized")
+            return
+
+        try:
+            self.logger.debug(f"Starting Q-learning update for task {task.task_id}")
+
+            # 1. Encode current state from task context
+            state_data = self._extract_state_from_task(task)
+            state_hash = self._hash_state(state_data)
+            self.logger.debug(f"Encoded state: {state_hash[:16]}... with {len(state_data)} features")
+
+            # 2. Get action that was taken (from current_action_id or infer from result)
+            action_id = self.current_action_id or self._infer_action_from_result(result)
+            if not action_id:
+                self.logger.warning("Cannot determine action taken, skipping Q-learning update")
+                return
+
+            # 3. Calculate reward from result
+            reward = self._calculate_reward(task, result, state_data)
+            self.logger.info(f"Calculated reward: {reward:.2f} for action {action_id}")
+
+            # Update metrics
+            self.metrics["total_reward"] += reward
+            self.metrics["learning_episodes"] += 1
+            self.metrics["avg_reward"] = (
+                self.metrics["total_reward"] / self.metrics["learning_episodes"]
+            )
+
+            # 4. Encode next state (terminal if task complete, otherwise from result)
+            is_terminal = result.get("done", True)
+            if is_terminal:
+                next_state_hash = None  # Terminal state
+                self.logger.debug("Terminal state reached")
+            else:
+                next_state_data = self._extract_state_from_result(result)
+                next_state_hash = self._hash_state(next_state_data)
+                self.logger.debug(f"Encoded next state: {next_state_hash[:16]}...")
+
+            # 5. Update Q-value using Bellman equation
+            # Q(s,a) ← Q(s,a) + α[r + γ max Q(s',a') - Q(s,a)]
+            await self.q_service.update_q_value(
+                agent_id=self.agent_id,
+                state_hash=state_hash,
+                action_id=action_id,
+                reward=reward,
+                next_state_hash=next_state_hash,
+                is_terminal=is_terminal
+            )
+            self.logger.debug("Q-value updated successfully")
+
+            # 6. Store full trajectory (SARS') for experience replay
+            await self._store_trajectory(
+                state_hash=state_hash,
+                state_data=state_data,
+                action_id=action_id,
+                reward=reward,
+                next_state_hash=next_state_hash,
+                next_state_data=next_state_data if not is_terminal else None,
+                task_id=task.task_id,
+                metadata=result
+            )
+            self.logger.debug("Trajectory stored for experience replay")
+
+            # 7. Decay epsilon (reduce exploration over time)
+            await self._decay_epsilon(reward)
+
+            self.logger.info(
+                f"Q-learning update complete: reward={reward:.2f}, "
+                f"avg_reward={self.metrics['avg_reward']:.2f}, "
+                f"episodes={self.metrics['learning_episodes']}"
+            )
+
+        except Exception as e:
+            self.logger.error(f"Q-learning update failed: {e}", exc_info=True)
+            # Don't fail the task if learning fails - graceful degradation
+
+    async def execute_with_learning(self, task: QETask) -> Dict[str, Any]:
+        """Execute task with Q-learning action selection
+
+        This method integrates Q-learning into the task execution cycle:
+        1. Encode state from task
+        2. Select action using epsilon-greedy policy (explore vs exploit)
+        3. Execute the selected action
+        4. Calculate reward based on outcome
+        5. Update Q-value (done in post_execution_hook → _learn_from_execution)
+        6. Return result with learning metrics
+
+        The learning loop:
+            State → Action Selection → Execute → Reward → Update Q-value → Next State
+
+        Args:
+            task: QE task to execute with learning
+
+        Returns:
+            Dict containing:
+            - Task execution result
+            - Learning metrics (reward, action, state_hash, exploration_used)
+            - Performance data
+
+        Example:
+            ```python
+            result = await agent.execute_with_learning(task)
+            print(f"Reward: {result['learning']['reward']}")
+            print(f"Action: {result['learning']['action_selected']}")
+            ```
+        """
+        if not self.enable_learning or not QLEARNING_AVAILABLE or not self.q_service:
+            # Fall back to standard execution if learning not available
+            self.logger.debug("Learning not available, falling back to standard execution")
+            return await self.execute(task)
+
+        try:
+            self.logger.info(f"Executing task with Q-learning: {task.task_id}")
+
+            # 1. Encode current state from task
+            state_data = self._extract_state_from_task(task)
+            state_hash = self._hash_state(state_data)
+            self.current_state_hash = state_hash
+            self.logger.debug(f"State encoded: {state_hash[:16]}...")
+
+            # 2. Select action using epsilon-greedy policy
+            action_id, exploration_used = await self.q_service.select_action(
+                agent_id=self.agent_id,
+                state_hash=state_hash,
+                available_actions=self._get_available_actions(task)
+            )
+            self.current_action_id = action_id
+            self.logger.info(
+                f"Selected action: {action_id} "
+                f"({'exploration' if exploration_used else 'exploitation'})"
+            )
+
+            # 3. Execute the action
+            # Subclasses implement execute() to perform the actual task
+            # The action_id influences behavior (stored in current_action_id)
+            execution_start = self._get_timestamp()
+            result = await self.execute(task)
+            execution_time = self._get_timestamp() - execution_start
+
+            # 4. Enhance result with learning metrics
+            result["learning"] = {
+                "action_selected": action_id,
+                "state_hash": state_hash,
+                "exploration_used": exploration_used,
+                "execution_time_seconds": execution_time,
+            }
+
+            # Note: Reward calculation and Q-value update happen in
+            # post_execution_hook → _learn_from_execution
+
+            self.logger.info(
+                f"Task executed with learning: {task.task_id}, "
+                f"action={action_id}, time={execution_time:.2f}s"
+            )
+
+            return result
+
+        except Exception as e:
+            self.logger.error(f"Q-learning execution failed: {e}", exc_info=True)
+            # Fall back to standard execution on error
+            self.logger.warning("Falling back to standard execution due to error")
+            return await self.execute(task)
+
+    # ============================================================================
+    # Helper Methods for Q-Learning Integration
+    # ============================================================================
+
+    def _extract_state_from_task(self, task: QETask) -> Dict[str, Any]:
+        """Extract state features from task for Q-learning
+
+        This is a default implementation that extracts basic features.
+        Subclasses should override to add agent-specific state features.
+
+        Args:
+            task: QE task to extract state from
+
+        Returns:
+            Dict of state features (will be hashed for Q-table lookup)
+
+        Example override in TestGeneratorAgent:
+            ```python
+            def _extract_state_from_task(self, task: QETask) -> Dict[str, Any]:
+                state = super()._extract_state_from_task(task)
+                state.update({
+                    "code_complexity": self._analyze_complexity(task.context),
+                    "coverage_gap": self._get_coverage_gap(task.context),
+                    "framework": task.context.get("framework", "pytest")
+                })
+                return state
+            ```
+        """
+        return {
+            "task_type": task.task_type,
+            "agent_id": self.agent_id,
+            # Add basic context features
+            "has_context": bool(task.context),
+            "context_size": len(str(task.context)) if task.context else 0,
+        }
+
+    def _extract_state_from_result(self, result: Dict[str, Any]) -> Dict[str, Any]:
+        """Extract next state features from execution result
+
+        Args:
+            result: Execution result containing outcome
+
+        Returns:
+            Dict of next state features
+        """
+        return {
+            "success": result.get("success", False),
+            "result_type": result.get("type", "unknown"),
+            "has_data": bool(result.get("data")),
+        }
+
+    def _hash_state(self, state_data: Dict[str, Any]) -> str:
+        """Hash state dictionary to create state identifier
+
+        Uses SHA-256 for consistent, deterministic hashing.
+
+        Args:
+            state_data: State features dictionary
+
+        Returns:
+            64-character hex hash string
+        """
+        # Sort keys for deterministic hashing
+        state_str = json.dumps(state_data, sort_keys=True)
+        return hashlib.sha256(state_str.encode()).hexdigest()
+
+    def _get_available_actions(self, task: QETask) -> List[str]:
+        """Get list of available actions for current task
+
+        This is a default implementation that returns generic actions.
+        Subclasses should override to provide agent-specific actions.
+
+        Args:
+            task: Current task
+
+        Returns:
+            List of action IDs
+
+        Example override:
+            ```python
+            def _get_available_actions(self, task: QETask) -> List[str]:
+                if task.task_type == "generate_tests":
+                    return ["property_based", "example_based", "mutation"]
+                return ["default_action"]
+            ```
+        """
+        return ["default_action", "alternative_action"]
+
+    def _infer_action_from_result(self, result: Dict[str, Any]) -> Optional[str]:
+        """Infer action that was taken from execution result
+
+        Used when current_action_id is not set (backward compatibility).
+
+        Args:
+            result: Execution result
+
+        Returns:
+            Action ID or None if cannot infer
+        """
+        # Check if result contains action information
+        if "learning" in result and "action_selected" in result["learning"]:
+            return result["learning"]["action_selected"]
+
+        # Default action if cannot infer
+        return "default_action"
+
+    def _calculate_reward(
+        self,
+        task: QETask,
+        result: Dict[str, Any],
+        state_data: Dict[str, Any]
+    ) -> float:
+        """Calculate reward for Q-learning update
+
+        This is a default multi-objective reward function.
+        Subclasses should override to provide agent-specific rewards.
+
+        Default reward components:
+        1. Success/failure: +50 / -50 points
+        2. Execution speed: Based on actual vs expected time
+        3. Quality improvement: Based on metrics
 
         Args:
             task: Completed task
             result: Execution result
-        """
-        # Store execution trajectory for learning
-        trajectory = {
-            "task_type": task.task_type,
-            "context": task.context,
-            "result": result,
-            "success": True,
-        }
+            state_data: State features
 
-        await self.store_result(
-            f"learning/trajectories/{task.task_id}",
-            trajectory,
-            ttl=2592000,  # 30 days
-            partition="learning"
-        )
+        Returns:
+            Reward value (typically -100 to +100)
+
+        Example override:
+            ```python
+            def _calculate_reward(self, task, result, state_data) -> float:
+                base_reward = super()._calculate_reward(task, result, state_data)
+
+                # Add test-specific rewards
+                coverage_gain = result.get("coverage_gain", 0)
+                tests_generated = result.get("tests_count", 0)
+
+                coverage_reward = coverage_gain * 10  # 1% = 10 points
+                efficiency_penalty = abs(tests_generated - 10) * -2
+
+                return base_reward + coverage_reward + efficiency_penalty
+            ```
+        """
+        reward = 0.0
+
+        # 1. Success/failure reward
+        if result.get("success", False):
+            reward += 50.0
+        else:
+            reward -= 50.0
+
+        # 2. Execution speed reward
+        expected_time = task.context.get("expected_time_seconds", 60)
+        actual_time = result.get("execution_time_seconds", expected_time)
+        if actual_time > 0:
+            time_ratio = expected_time / actual_time
+            # Faster than expected: positive, slower: negative
+            reward += (time_ratio - 1.0) * 20.0
+
+        # 3. Quality improvement reward
+        quality_delta = result.get("quality_improvement", 0.0)
+        reward += quality_delta * 2.0
+
+        # Clip reward to reasonable range
+        return max(-100.0, min(100.0, reward))
+
+    async def _store_trajectory(
+        self,
+        state_hash: str,
+        state_data: Dict[str, Any],
+        action_id: str,
+        reward: float,
+        next_state_hash: Optional[str],
+        next_state_data: Optional[Dict[str, Any]],
+        task_id: str,
+        metadata: Dict[str, Any]
+    ):
+        """Store trajectory (SARS') in database for experience replay
+
+        Args:
+            state_hash: Current state hash
+            state_data: Current state features
+            action_id: Action taken
+            reward: Reward received
+            next_state_hash: Next state hash (None if terminal)
+            next_state_data: Next state features (None if terminal)
+            task_id: Task identifier
+            metadata: Additional metadata
+        """
+        if not self.q_service:
+            return
+
+        try:
+            await self.q_service.store_experience(
+                agent_id=self.agent_id,
+                state_hash=state_hash,
+                state_data=state_data,
+                action_id=action_id,
+                reward=reward,
+                next_state_hash=next_state_hash,
+                next_state_data=next_state_data,
+                task_id=task_id,
+                metadata=metadata
+            )
+        except Exception as e:
+            self.logger.error(f"Failed to store trajectory: {e}", exc_info=True)
+
+    async def _decay_epsilon(self, recent_reward: float):
+        """Decay exploration rate (epsilon) based on recent performance
+
+        Uses reward-based epsilon decay (RBED) for adaptive exploration.
+
+        Args:
+            recent_reward: Reward from most recent episode
+        """
+        if not self.q_service:
+            return
+
+        try:
+            await self.q_service.decay_epsilon(
+                agent_id=self.agent_id,
+                recent_reward=recent_reward
+            )
+        except Exception as e:
+            self.logger.error(f"Failed to decay epsilon: {e}", exc_info=True)
+
+    def _get_timestamp(self) -> float:
+        """Get current timestamp in seconds
+
+        Returns:
+            Unix timestamp
+        """
+        import time
+        return time.time()
 
     async def get_metrics(self) -> Dict[str, Any]:
         """Get agent execution metrics

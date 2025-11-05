@@ -1,0 +1,26 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "LionAGI QE Fleet - PostgreSQL",
+      "Group": "Development",
+      "Host": "postgres",
+      "Port": 5432,
+      "MaintenanceDB": "postgres",
+      "Username": "qe_agent",
+      "Password": "qe_secure_password_123",
+      "SSLMode": "prefer",
+      "Comment": "Main PostgreSQL database for Q-Learning development",
+      "Databases": {
+        "1": {
+          "Name": "lionagi_qe_learning",
+          "Comment": "Q-Learning database for agent training"
+        }
+      },
+      "AutoConnect": true,
+      "Tags": [
+        "development",
+        "qlearning"
+      ]
+    }
+  }
+}
