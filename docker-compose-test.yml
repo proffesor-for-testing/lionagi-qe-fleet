@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  # PostgreSQL for integration tests
+  postgres-test:
+    image: postgres:15-alpine
+    container_name: lionagi-qe-postgres-test
+    environment:
+      POSTGRES_USER: qe_agent_test
+      POSTGRES_PASSWORD: test_password
+      POSTGRES_DB: lionagi_qe_test
+    ports:
+      - "5433:5432"  # Use different port to avoid conflicts
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U qe_agent_test -d lionagi_qe_test"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    volumes:
+      - ./src/lionagi_qe/learning/schema/learning.sql:/docker-entrypoint-initdb.d/01-learning.sql
+      - ./src/lionagi_qe/learning/schema/memory_extension.sql:/docker-entrypoint-initdb.d/02-memory.sql
+    networks:
+      - qe-test-network
+
+  # Redis for integration tests
+  redis-test:
+    image: redis:7-alpine
+    container_name: lionagi-qe-redis-test
+    ports:
+      - "6380:6379"  # Use different port to avoid conflicts
+    command: redis-server --appendonly yes --appendfsync everysec
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    volumes:
+      - redis-test-data:/data
+    networks:
+      - qe-test-network
+
+networks:
+  qe-test-network:
+    driver: bridge
+
+volumes:
+  redis-test-data:
+    driver: local

@@ -1,29 +1,39 @@
-"""Example 1: Basic QE Fleet Usage"""
+"""Example 1: Basic QE Orchestrator Usage
+
+This example demonstrates the updated API using QEOrchestrator directly
+instead of the deprecated QEFleet wrapper.
+"""
 
 import asyncio
-from lionagi import iModel
-from lionagi_qe import QEFleet, QETask
+from lionagi import iModel, Session
+from lionagi_qe import QEOrchestrator, QETask, ModelRouter
+from lionagi_qe.core.memory import QEMemory
 from lionagi_qe.agents import TestGeneratorAgent
 
 
 async def main():
     """Basic usage: Generate tests for a simple function"""
 
-    # Initialize the fleet
-    fleet = QEFleet(enable_routing=True)
-    await fleet.initialize()
+    # Initialize components directly (no QEFleet wrapper)
+    memory = QEMemory()  # For simple examples; use Session().context or persistence in production
+    router = ModelRouter(enable_routing=True)
+    orchestrator = QEOrchestrator(
+        memory=memory,
+        router=router,
+        enable_learning=False
+    )
 
     # Create a test generator agent
     model = iModel(provider="openai", model="gpt-4o-mini")
     test_gen = TestGeneratorAgent(
         agent_id="test-generator",
         model=model,
-        memory=fleet.memory,
+        memory=memory,
         skills=["tdd", "property-based-testing"]
     )
 
-    # Register the agent
-    fleet.register_agent(test_gen)
+    # Register the agent with orchestrator
+    orchestrator.register_agent(test_gen)
 
     # Create a test generation task
     code_to_test = """
@@ -48,9 +58,9 @@ def divide(a: float, b: float) -> float:
         }
     )
 
-    # Execute the task
+    # Execute the task using orchestrator
     print("🚀 Generating tests...")
-    result = await fleet.execute("test-generator", task)
+    result = await orchestrator.execute_agent("test-generator", task)
 
     print("\n✅ Test Generation Complete!")
     print(f"\nTest Name: {result.test_name}")
@@ -61,9 +71,9 @@ def divide(a: float, b: float) -> float:
     print(f"\n📝 Generated Test Code:\n")
     print(result.test_code)
 
-    # Get fleet status
-    status = await fleet.get_status()
-    print(f"\n📊 Fleet Status:")
+    # Get orchestrator status
+    status = await orchestrator.get_fleet_status()
+    print(f"\n📊 Orchestrator Status:")
     print(f"Total Agents: {status['total_agents']}")
     print(f"Routing Stats: {status['routing_stats']}")
 

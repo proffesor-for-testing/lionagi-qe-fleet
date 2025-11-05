@@ -35,23 +35,21 @@ cp .env.example .env
 # Edit .env and add your API keys
 ```
 
-### First Example
+### First Example (Direct Agent Usage)
 
 ```python
 import asyncio
 from dotenv import load_dotenv
 from lionagi import iModel
-from lionagi_qe.core.memory import QEMemory
-from lionagi_qe.core.task import QETask
+from lionagi_qe import QETask
 from lionagi_qe.agents import CoverageAnalyzerAgent
 
 load_dotenv()
 
 async def main():
-    # 1. Initialize agent
+    # 1. Initialize agent (no memory needed for single agent)
     model = iModel(provider="openai", model="gpt-4o-mini")
-    memory = QEMemory()
-    agent = CoverageAnalyzerAgent("coverage-analyzer", model, memory)
+    agent = CoverageAnalyzerAgent("coverage-analyzer", model)
 
     # 2. Create task
     task = QETask(
@@ -68,6 +66,24 @@ async def main():
     print(f"Coverage: {result.overall_coverage}%")
 
 asyncio.run(main())
+```
+
+### With Persistence (Production)
+
+```python
+from lionagi_qe import QEOrchestrator
+
+async def main_with_persistence():
+    # Initialize with PostgreSQL backend
+    orchestrator = QEOrchestrator(
+        memory_backend="postgres",
+        postgres_url="postgresql://qe_user:password@localhost:5432/lionagi_qe"
+    )
+    await orchestrator.initialize()
+
+    # Execute agent (results persist across restarts)
+    result = await orchestrator.execute_agent("coverage-analyzer", task)
+    print(f"Coverage: {result.overall_coverage}%")
 ```
 
 ---
@@ -135,23 +151,41 @@ from lionagi_qe.agents import YourAgentClass
 
 ### 2. Initialize Components
 
+**Option A: Direct Agent Usage (Simple)**
 ```python
 load_dotenv()  # Load API keys
 
 # Initialize model (supports OpenAI, Anthropic, Ollama)
 model = iModel(provider="openai", model="gpt-4o-mini")
 
-# Initialize shared memory
-memory = QEMemory()
-
-# Create agent
+# Create agent (no shared memory needed)
 agent = YourAgentClass(
     agent_id="unique-agent-id",
     model=model,
-    memory=memory,
     skills=["relevant", "skills"],  # Optional
-    enable_learning=True  # Optional: Q-learning
+    enable_learning=False  # No persistence for single agent
 )
+```
+
+**Option B: With QEOrchestrator (Multi-Agent + Persistence)**
+```python
+from lionagi_qe import QEOrchestrator
+
+# Initialize orchestrator with persistence backend
+orchestrator = QEOrchestrator(
+    memory_backend="postgres",  # or "redis" or "memory"
+    postgres_url="postgresql://user:pass@localhost:5432/lionagi_qe",
+    enable_learning=True  # Q-learning with persistent storage
+)
+await orchestrator.initialize()
+
+# Agents share memory automatically
+agent = YourAgentClass(
+    agent_id="unique-agent-id",
+    model=model,
+    memory=orchestrator.memory  # Shared persistence
+)
+orchestrator.register_agent(agent)
 ```
 
 ### 3. Create a Task
@@ -476,6 +510,62 @@ print(f"Tech Debt: {result.technical_debt.debt_ratio:.1f}%")
 
 ---
 
+## Persistence Configuration
+
+### Memory Backend Options
+
+**In-Memory (Development)**
+```python
+orchestrator = QEOrchestrator(memory_backend="memory")
+# Fast, no dependencies, data lost on restart
+```
+
+**PostgreSQL (Production)**
+```python
+orchestrator = QEOrchestrator(
+    memory_backend="postgres",
+    postgres_url="postgresql://qe_user:password@localhost:5432/lionagi_qe"
+)
+# Persistent, ACID compliance, reuses Q-Learning infrastructure
+```
+
+**Redis (High-Speed Cache)**
+```python
+orchestrator = QEOrchestrator(
+    memory_backend="redis",
+    redis_url="redis://localhost:6379/0"
+)
+# Fast, ephemeral, good for distributed systems
+```
+
+### Setup PostgreSQL
+
+**Using Docker:**
+```bash
+docker run -d \
+  --name lionagi-qe-postgres \
+  -e POSTGRES_DB=lionagi_qe \
+  -e POSTGRES_USER=qe_user \
+  -e POSTGRES_PASSWORD=secure_password \
+  -p 5432:5432 \
+  postgres:16-alpine
+
+# Initialize schema (reuses Q-Learning schema!)
+python -m lionagi_qe.persistence.init_db
+```
+
+**Benefits:**
+- Reuses existing Q-Learning PostgreSQL infrastructure
+- No additional database needed
+- Same connection pooling (asyncpg)
+- Already battle-tested with 7 tables
+
+### Setup Redis
+
+```bash
+docker run -d --name lionagi-qe-redis -p 6379:6379 redis:7-alpine
+```
+
 ## Agent Coordination
 
 Agents share data through the **`aqe/*` memory namespace**:
@@ -483,35 +573,45 @@ Agents share data through the **`aqe/*` memory namespace**:
 ### Sequential Pipeline
 
 ```python
-# Step 1: Coverage Analyzer finds gaps
-coverage_result = await coverage_agent.execute(coverage_task)
-# Stores in: aqe/coverage/gaps
+# With QEOrchestrator
+orchestrator = QEOrchestrator(memory_backend="postgres")
+await orchestrator.initialize()
 
-# Step 2: Test Generator creates tests for gaps
-gaps = await memory.retrieve("aqe/coverage/gaps")
+# Step 1: Coverage Analyzer finds gaps
+coverage_result = await orchestrator.execute_agent("coverage-analyzer", coverage_task)
+# Stores in: aqe/coverage/gaps (persists to PostgreSQL)
+
+# Step 2: Test Generator reads from persistent memory
+gaps = await orchestrator.memory.retrieve("aqe/coverage/gaps")
 test_gen_task = QETask(
     task_type="generate_tests",
     context={"gaps": gaps}
 )
-test_result = await test_gen_agent.execute(test_gen_task)
+test_result = await orchestrator.execute_agent("test-generator", test_gen_task)
 
 # Step 3: Quality Gate evaluates readiness
-gate_result = await quality_gate.execute(gate_task)
+gate_result = await orchestrator.execute_agent("quality-gate", gate_task)
 ```
 
 ### Parallel Execution
 
 ```python
+# With QEOrchestrator
+results = await orchestrator.execute_parallel(
+    agents=["coverage-analyzer", "security-scanner", "performance-tester"],
+    tasks=[coverage_task, security_task, perf_task]
+)
+
+coverage_result, security_result, perf_result = results
+
+# Direct asyncio (no orchestrator)
 import asyncio
 
-# Run multiple agents concurrently
 results = await asyncio.gather(
     coverage_agent.execute(coverage_task),
     security_agent.execute(security_task),
     performance_agent.execute(perf_task)
 )
-
-coverage_result, security_result, perf_result = results
 ```
 
 ---
@@ -535,19 +635,30 @@ All agents use the shared `aqe/*` memory namespace:
 
 ### Using Memory
 
+**With QEOrchestrator (Persistent):**
 ```python
-# Store data
-await agent.store_memory(
+orchestrator = QEOrchestrator(memory_backend="postgres")
+
+# Store data (persists to database)
+await orchestrator.memory.store(
     "aqe/my-key",
     {"data": "value"},
     ttl=86400  # 24 hours
 )
 
-# Retrieve data
-data = await agent.get_memory("aqe/my-key", default={})
+# Retrieve data (from database)
+data = await orchestrator.memory.retrieve("aqe/my-key")
 
-# Search memory
-results = await agent.search_memory("aqe/coverage/.*")
+# Search memory (regex search in database)
+results = await orchestrator.memory.search("aqe/coverage/.*")
+```
+
+**Direct Agent Usage (No Persistence):**
+```python
+# Agents can work independently without shared memory
+agent = CoverageAnalyzerAgent("coverage", model)
+result = await agent.execute(task)
+# Results are returned but not persisted
 ```
 
 ---

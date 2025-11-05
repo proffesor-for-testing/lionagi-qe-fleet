@@ -1,6 +1,6 @@
 # LionAGI QE Fleet
 
-[![Version](https://img.shields.io/badge/version-1.0.2-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org)
 [![Security](https://img.shields.io/badge/security-95%2F100-brightgreen.svg)](SECURITY.md)
@@ -65,18 +65,23 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed development setup and guidel
 
 ## 🏃 Quick Start
 
-### Basic Usage
+### Basic Usage (Direct Session)
 
 ```python
 import asyncio
-from lionagi_qe import QEFleet, QETask
+from lionagi import iModel, Session
+from lionagi_qe import QETask
+from lionagi_qe.agents import TestGeneratorAgent
 
 async def main():
-    # Initialize the QE fleet
-    fleet = QEFleet()
-    await fleet.initialize()
+    # Create model and session
+    model = iModel(provider="openai", model="gpt-4o-mini")
+    session = Session()
 
-    # Create a test generation task
+    # Create agent
+    agent = TestGeneratorAgent("test-gen", model)
+
+    # Create and execute task
     task = QETask(
         task_type="generate_tests",
         context={
@@ -85,22 +90,39 @@ async def main():
         }
     )
 
-    # Execute with test generator agent
-    result = await fleet.execute("test-generator", task)
+    result = await agent.execute(task)
     print(result.test_code)
 
 asyncio.run(main())
+```
+
+### Using QEOrchestrator (Advanced)
+
+```python
+from lionagi_qe import QEOrchestrator
+
+async def orchestrated_workflow():
+    # Initialize orchestrator with persistence
+    orchestrator = QEOrchestrator(
+        memory_backend="postgres",  # or "redis" or "memory"
+        enable_learning=True
+    )
+    await orchestrator.initialize()
+
+    # Execute workflow
+    result = await orchestrator.execute_agent("test-generator", task)
+    print(result)
 ```
 
 ### Multi-Agent Pipeline
 
 ```python
 async def quality_pipeline():
-    fleet = QEFleet()
-    await fleet.initialize()
+    orchestrator = QEOrchestrator()
+    await orchestrator.initialize()
 
     # Execute sequential pipeline
-    result = await fleet.execute_pipeline(
+    result = await orchestrator.execute_pipeline(
         pipeline=[
             "test-generator",
             "test-executor",
@@ -121,11 +143,11 @@ async def quality_pipeline():
 
 ```python
 async def parallel_analysis():
-    fleet = QEFleet()
-    await fleet.initialize()
+    orchestrator = QEOrchestrator()
+    await orchestrator.initialize()
 
     # Run multiple agents in parallel
-    results = await fleet.execute_parallel(
+    results = await orchestrator.execute_parallel(
         agents=["test-generator", "security-scanner", "performance-tester"],
         tasks=[
             {"task": "generate_tests", "code": code1},
@@ -168,9 +190,34 @@ async def parallel_analysis():
 - **visual-tester**: AI-powered UI regression detection
 - **chaos-engineer**: Fault injection and resilience testing
 
-## 📋 Agent Coordination
+## 📋 Agent Coordination & Persistence
 
-Agents coordinate through a shared memory namespace (`aqe/*`):
+### Memory Backends
+
+Agents coordinate through a shared memory namespace (`aqe/*`) with multiple backend options:
+
+**Development** (In-Memory):
+```python
+orchestrator = QEOrchestrator(memory_backend="memory")
+```
+
+**Production** (PostgreSQL):
+```python
+orchestrator = QEOrchestrator(
+    memory_backend="postgres",
+    postgres_url="postgresql://user:pass@localhost:5432/lionagi_qe"
+)
+```
+
+**Production** (Redis):
+```python
+orchestrator = QEOrchestrator(
+    memory_backend="redis",
+    redis_url="redis://localhost:6379/0"
+)
+```
+
+### Memory Namespace
 
 ```
 aqe/
@@ -183,6 +230,27 @@ aqe/
 └── swarm/         # Multi-agent coordination
 ```
 
+### Setup Persistence
+
+**PostgreSQL** (Recommended for production):
+```bash
+# Using Docker
+docker run -d \
+  -e POSTGRES_DB=lionagi_qe \
+  -e POSTGRES_USER=qe_user \
+  -e POSTGRES_PASSWORD=secure_password \
+  -p 5432:5432 \
+  postgres:16-alpine
+
+# Initialize schema
+python -m lionagi_qe.persistence.init_db
+```
+
+**Redis** (Fast, ephemeral):
+```bash
+docker run -d -p 6379:6379 redis:7-alpine
+```
+
 ## 💡 Advanced Features
 
 ### Multi-Model Routing
@@ -190,7 +258,7 @@ aqe/
 Automatically route tasks to optimal models for cost efficiency:
 
 ```python
-fleet = QEFleet(enable_routing=True)
+orchestrator = QEOrchestrator(enable_routing=True)
 
 # Simple tasks → GPT-3.5 ($0.0004)
 # Moderate tasks → GPT-4o-mini ($0.0008)
@@ -200,29 +268,45 @@ fleet = QEFleet(enable_routing=True)
 
 ### Q-Learning Integration
 
-Agents learn from past executions:
+Agents learn from past executions with persistent storage:
 
 ```python
-# Enable learning mode
-fleet = QEFleet(enable_learning=True)
+# Enable learning with PostgreSQL backend
+orchestrator = QEOrchestrator(
+    enable_learning=True,
+    memory_backend="postgres"
+)
 
 # Agents automatically improve through experience
 # Target: 20% improvement over baseline
+# Learning data persists across restarts
 ```
 
-### Custom Workflows
+### Custom Workflows with LionAGI Builder
 
-Build complex workflows with LionAGI's Builder:
+Build complex workflows directly with LionAGI's Builder pattern:
 
 ```python
-from lionagi import Builder
+from lionagi import Builder, Session
 
+# Direct LionAGI usage (no wrapper)
+session = Session()
 builder = Builder("CustomQEWorkflow")
+
 node1 = builder.add_operation("test-generator", context=ctx)
 node2 = builder.add_operation("security-scanner", depends_on=[node1])
 node3 = builder.add_operation("quality-gate", depends_on=[node1, node2])
 
-result = await fleet.execute_workflow(builder.get_graph())
+result = await session.flow(builder.get_graph())
+```
+
+Or use QEOrchestrator for convenience:
+
+```python
+from lionagi_qe import QEOrchestrator
+
+orchestrator = QEOrchestrator()
+result = await orchestrator.execute_workflow(builder.get_graph())
 ```
 
 ## 📚 Documentation
@@ -236,9 +320,14 @@ result = await fleet.execute_workflow(builder.get_graph())
 
 ### Core Documentation
 - [Architecture Guide](docs/architecture/system-overview.md)
-- [Migration Guide](docs/guides/migration.md)
+- [Migration Guide](docs/guides/migration.md) - **Migrating from QEFleet? Start here!**
+- [Persistence Setup](docs/guides/persistence-setup.md) - PostgreSQL & Redis configuration
 - [Agent Catalog](docs/agents/index.md)
 - [API Reference](docs/reference/index.md)
+
+### Migration Guides
+- **[QEFleet to QEOrchestrator](docs/migration/fleet-to-orchestrator.md)** - Deprecation guide
+- **[Adding Persistence](docs/migration/memory-persistence.md)** - PostgreSQL & Redis setup
 
 ### Advanced Features
 - [Advanced Features Migration Guide](docs/guides/advanced-features-migration.md)
@@ -319,7 +408,7 @@ This project builds on [LionAGI](https://github.com/lion-agi/lionagi) (Apache 2.
 
 ## 📊 Project Status
 
-**Version**: 1.0.0 (Released 2025-11-05)
+**Version**: 1.1.0 (In Development)
 **Status**: Production Ready
 **Security Score**: 95/100
 **Test Coverage**: 82%

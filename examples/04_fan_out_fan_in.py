@@ -1,8 +1,13 @@
-"""Example 4: Fan-Out/Fan-In Pattern with Fleet Commander"""
+"""Example 4: Fan-Out/Fan-In Pattern with Fleet Commander
+
+This example demonstrates fan-out/fan-in orchestration using QEOrchestrator directly
+instead of the deprecated QEFleet wrapper.
+"""
 
 import asyncio
 from lionagi import iModel
-from lionagi_qe import QEFleet
+from lionagi_qe import QEOrchestrator, ModelRouter
+from lionagi_qe.core.memory import QEMemory
 from lionagi_qe.agents import (
     FleetCommanderAgent,
     TestGeneratorAgent,
@@ -13,9 +18,14 @@ from lionagi_qe.agents import (
 async def main():
     """Fan-out/fan-in: Commander decomposes, workers execute, commander synthesizes"""
 
-    # Initialize fleet
-    fleet = QEFleet(enable_routing=True, enable_learning=True)
-    await fleet.initialize()
+    # Initialize components directly
+    memory = QEMemory()
+    router = ModelRouter(enable_routing=True)
+    orchestrator = QEOrchestrator(
+        memory=memory,
+        router=router,
+        enable_learning=True
+    )
 
     # Create models
     commander_model = iModel(provider="openai", model="gpt-4")  # More powerful
@@ -25,7 +35,7 @@ async def main():
     commander = FleetCommanderAgent(
         agent_id="fleet-commander",
         model=commander_model,
-        memory=fleet.memory
+        memory=memory
     )
 
     # Create worker agents
@@ -33,19 +43,19 @@ async def main():
         TestGeneratorAgent(
             agent_id="test-generator",
             model=worker_model,
-            memory=fleet.memory
+            memory=memory
         ),
         TestExecutorAgent(
             agent_id="test-executor",
             model=worker_model,
-            memory=fleet.memory
+            memory=memory
         ),
     ]
 
-    # Register all agents
-    fleet.register_agent(commander)
+    # Register all agents with orchestrator
+    orchestrator.register_agent(commander)
     for worker in workers:
-        fleet.register_agent(worker)
+        orchestrator.register_agent(worker)
 
     # Execute fan-out/fan-in
     context = {
@@ -73,7 +83,7 @@ Tasks:
     print("🚀 Executing Fan-Out/Fan-In Pattern...")
     print("Commander → Workers → Synthesis\n")
 
-    result = await fleet.execute_fan_out_fan_in(
+    result = await orchestrator.execute_fan_out_fan_in(
         coordinator="fleet-commander",
         workers=["test-generator", "test-executor"],
         context=context
@@ -91,8 +101,8 @@ Tasks:
     print(f"\n📊 Final Synthesis:")
     print(result['synthesis'][:500] + "..." if len(result['synthesis']) > 500 else result['synthesis'])
 
-    # Get comprehensive status
-    status = await fleet.get_status()
+    # Get comprehensive status from orchestrator
+    status = await orchestrator.get_fleet_status()
     print(f"\n💰 Cost Analysis:")
     routing_stats = status['routing_stats']
     print(f"  Total Cost: ${routing_stats['total_cost']:.4f}")

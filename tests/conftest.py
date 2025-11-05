@@ -2,17 +2,37 @@
 
 import pytest
 import asyncio
+import warnings
 from typing import Dict, Any
 from lionagi import iModel
 from lionagi_qe.core.memory import QEMemory
 from lionagi_qe.core.router import ModelRouter
 from lionagi_qe.core.task import QETask
-from lionagi_qe.core.fleet import QEFleet
 from lionagi_qe.core.orchestrator import QEOrchestrator
 from lionagi_qe.agents.test_generator import TestGeneratorAgent
 from lionagi_qe.agents.test_executor import TestExecutorAgent
 from lionagi_qe.agents.fleet_commander import FleetCommanderAgent
 from lionagi_qe.agents.flaky_test_hunter import FlakyTestHunterAgent
+
+
+# ============================================================================
+# Pytest Configuration
+# ============================================================================
+
+def pytest_configure(config):
+    """Register custom markers"""
+    config.addinivalue_line(
+        "markers", "integration: mark test as integration test requiring real databases"
+    )
+    config.addinivalue_line(
+        "markers", "postgres: mark test as requiring PostgreSQL"
+    )
+    config.addinivalue_line(
+        "markers", "redis: mark test as requiring Redis"
+    )
+    config.addinivalue_line(
+        "markers", "slow: mark test as slow running"
+    )
 
 
 @pytest.fixture
@@ -52,11 +72,24 @@ async def qe_orchestrator(qe_memory, model_router):
 
 
 @pytest.fixture
-async def qe_fleet():
-    """Create QE fleet instance"""
-    fleet = QEFleet(enable_routing=False, enable_learning=False)
-    await fleet.initialize()
-    return fleet
+async def qe_fleet(qe_memory, model_router):
+    """Create QE fleet instance (DEPRECATED - use qe_orchestrator instead)
+
+    This fixture is kept for backward compatibility with existing tests.
+    New tests should use qe_orchestrator fixture directly.
+    """
+    warnings.warn(
+        "qe_fleet fixture is deprecated. Use qe_orchestrator fixture instead.",
+        DeprecationWarning,
+        stacklevel=2
+    )
+
+    # Return orchestrator directly instead of QEFleet wrapper
+    return QEOrchestrator(
+        memory=qe_memory,
+        router=model_router,
+        enable_learning=False
+    )
 
 
 @pytest.fixture

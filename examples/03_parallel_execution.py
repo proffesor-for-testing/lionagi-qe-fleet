@@ -1,17 +1,27 @@
-"""Example 3: Parallel Multi-Agent Execution"""
+"""Example 3: Parallel Multi-Agent Execution
+
+This example demonstrates parallel agent execution using QEOrchestrator directly
+instead of the deprecated QEFleet wrapper.
+"""
 
 import asyncio
 from lionagi import iModel
-from lionagi_qe import QEFleet
+from lionagi_qe import QEOrchestrator, ModelRouter
+from lionagi_qe.core.memory import QEMemory
 from lionagi_qe.agents import TestGeneratorAgent, TestExecutorAgent
 
 
 async def main():
     """Execute multiple agents in parallel for different tasks"""
 
-    # Initialize fleet
-    fleet = QEFleet(enable_routing=True)
-    await fleet.initialize()
+    # Initialize components directly
+    memory = QEMemory()
+    router = ModelRouter(enable_routing=True)
+    orchestrator = QEOrchestrator(
+        memory=memory,
+        router=router,
+        enable_learning=False
+    )
 
     # Create agents
     model = iModel(provider="openai", model="gpt-4o-mini")
@@ -20,22 +30,22 @@ async def main():
         TestGeneratorAgent(
             agent_id="test-generator-unit",
             model=model,
-            memory=fleet.memory
+            memory=memory
         ),
         TestGeneratorAgent(
             agent_id="test-generator-integration",
             model=model,
-            memory=fleet.memory
+            memory=memory
         ),
         TestExecutorAgent(
             agent_id="test-executor-fast",
             model=model,
-            memory=fleet.memory
+            memory=memory
         ),
     ]
 
     for agent in agents_to_register:
-        fleet.register_agent(agent)
+        orchestrator.register_agent(agent)
 
     # Define parallel tasks
     agent_ids = [
@@ -68,10 +78,10 @@ async def main():
         }
     ]
 
-    # Execute in parallel
+    # Execute in parallel using orchestrator
     print("🚀 Executing 3 Agents in Parallel...\n")
 
-    results = await fleet.execute_parallel(agent_ids, tasks)
+    results = await orchestrator.execute_parallel(agent_ids, tasks)
 
     print("\n✅ Parallel Execution Complete!")
     print(f"\n📊 Results:\n")
@@ -86,8 +96,8 @@ async def main():
             print(f"   Tests Executed: {result.total_tests}")
         print()
 
-    # Fleet status
-    status = await fleet.get_status()
+    # Orchestrator status
+    status = await orchestrator.get_fleet_status()
     print(f"Total Agents Used: {status['orchestration_metrics']['total_agents_used']}")
 
 

@@ -1,5 +1,11 @@
-"""Main QE Fleet interface"""
+"""Main QE Fleet interface
 
+DEPRECATED: This module is deprecated as of v1.1.0 and will be removed in v2.0.0.
+Please use QEOrchestrator directly instead.
+See docs/migration/fleet-to-orchestrator.md for migration guide.
+"""
+
+import warnings
 from typing import Dict, Any, List, Optional, Callable
 from lionagi.operations import ExpansionStrategy
 from .memory import QEMemory
@@ -13,6 +19,27 @@ import logging
 
 class QEFleet:
     """Main interface for LionAGI QE Fleet
+
+    DEPRECATED: This class is deprecated as of v1.1.0 and will be removed in v2.0.0.
+
+    Migration guide:
+        Before:
+            fleet = QEFleet(enable_routing=True)
+            await fleet.initialize()
+            fleet.register_agent(agent)
+            result = await fleet.execute(agent_id, task)
+
+        After:
+            from lionagi_qe import QEOrchestrator, ModelRouter
+            from lionagi.core import Session
+
+            memory = Session().context  # or QEMemory() for now
+            router = ModelRouter(enable_routing=True)
+            orchestrator = QEOrchestrator(memory, router)
+            orchestrator.register_agent(agent)
+            result = await orchestrator.execute_agent(agent_id, task)
+
+    See docs/migration/fleet-to-orchestrator.md for detailed migration guide.
 
     Provides high-level API for:
     - Fleet initialization
@@ -31,6 +58,8 @@ class QEFleet:
     ):
         """Initialize QE Fleet
 
+        DEPRECATED: Use QEOrchestrator instead.
+
         Args:
             enable_routing: Enable multi-model routing for cost optimization
             enable_learning: Enable Q-learning across fleet
@@ -38,6 +67,13 @@ class QEFleet:
             fleet_id: Unique identifier for this fleet instance
             cost_alert_threshold: Dollar amount that triggers cost warnings
         """
+        warnings.warn(
+            "QEFleet is deprecated and will be removed in v2.0.0. "
+            "Use QEOrchestrator instead. "
+            "See docs/migration/fleet-to-orchestrator.md for migration guide.",
+            DeprecationWarning,
+            stacklevel=2
+        )
         # Initialize hooks first (if enabled)
         self.hooks = QEHooks(
             fleet_id=fleet_id,

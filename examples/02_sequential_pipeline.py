@@ -1,17 +1,27 @@
-"""Example 2: Sequential QE Pipeline"""
+"""Example 2: Sequential QE Pipeline
+
+This example demonstrates pipeline orchestration using QEOrchestrator directly
+instead of the deprecated QEFleet wrapper.
+"""
 
 import asyncio
 from lionagi import iModel
-from lionagi_qe import QEFleet
+from lionagi_qe import QEOrchestrator, ModelRouter
+from lionagi_qe.core.memory import QEMemory
 from lionagi_qe.agents import TestGeneratorAgent, TestExecutorAgent
 
 
 async def main():
     """Execute a sequential QE pipeline: generate → execute → analyze"""
 
-    # Initialize fleet with routing
-    fleet = QEFleet(enable_routing=True, enable_learning=True)
-    await fleet.initialize()
+    # Initialize components directly
+    memory = QEMemory()
+    router = ModelRouter(enable_routing=True)
+    orchestrator = QEOrchestrator(
+        memory=memory,
+        router=router,
+        enable_learning=True
+    )
 
     # Create model (or use router)
     model = iModel(provider="openai", model="gpt-4o-mini")
@@ -20,16 +30,16 @@ async def main():
     test_gen = TestGeneratorAgent(
         agent_id="test-generator",
         model=model,
-        memory=fleet.memory
+        memory=memory
     )
     test_exec = TestExecutorAgent(
         agent_id="test-executor",
         model=model,
-        memory=fleet.memory
+        memory=memory
     )
 
-    fleet.register_agent(test_gen)
-    fleet.register_agent(test_exec)
+    orchestrator.register_agent(test_gen)
+    orchestrator.register_agent(test_exec)
 
     # Define pipeline
     pipeline = [
@@ -52,11 +62,11 @@ def fibonacci(n: int) -> int:
         "parallel": True
     }
 
-    # Execute pipeline
+    # Execute pipeline using orchestrator
     print("🚀 Executing QE Pipeline...")
     print(f"Pipeline: {' → '.join(pipeline)}\n")
 
-    result = await fleet.execute_pipeline(pipeline, context)
+    result = await orchestrator.execute_pipeline(pipeline, context)
 
     print("\n✅ Pipeline Complete!")
     print(f"\n📊 Results:")
@@ -64,9 +74,9 @@ def fibonacci(n: int) -> int:
         print(f"\nOperation {operation_id}:")
         print(f"Result: {operation_result}")
 
-    # Get fleet metrics
-    status = await fleet.get_status()
-    print(f"\n📈 Fleet Metrics:")
+    # Get orchestrator metrics
+    status = await orchestrator.get_fleet_status()
+    print(f"\n📈 Orchestrator Metrics:")
     print(f"Workflows Executed: {status['orchestration_metrics']['workflows_executed']}")
     print(f"Total Agents Used: {status['orchestration_metrics']['total_agents_used']}")
 

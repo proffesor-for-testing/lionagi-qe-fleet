@@ -78,6 +78,39 @@ class TestGeneratorAgent(BaseQEAgent):
     - Test pattern learning and reuse
     """
 
+    def __init__(
+        self,
+        agent_id: str,
+        model: Any,
+        memory: Optional[Any] = None,
+        skills: Optional[List[str]] = None,
+        enable_learning: bool = False,
+        q_learning_service: Optional[Any] = None,
+        memory_config: Optional[Dict[str, Any]] = None
+    ):
+        """Initialize Test Generator Agent
+
+        Args:
+            agent_id: Unique agent identifier (e.g., "test-generator")
+            model: LionAGI model instance
+            memory: Memory backend (PostgresMemory/RedisMemory/QEMemory or None for Session.context)
+            skills: List of QE skills this agent uses
+            enable_learning: Enable Q-learning integration
+            q_learning_service: Optional Q-learning service instance
+            memory_config: Optional config for auto-initializing memory backend
+                Example: {"type": "postgres", "db_manager": db_mgr}
+                        {"type": "redis", "host": "localhost"}
+        """
+        super().__init__(
+            agent_id=agent_id,
+            model=model,
+            memory=memory,
+            skills=skills or ["agentic-quality-engineering", "api-testing-patterns", "tdd-london-chicago"],
+            enable_learning=enable_learning,
+            q_learning_service=q_learning_service,
+            memory_config=memory_config
+        )
+
     def get_system_prompt(self) -> str:
         return """You are an expert test generation agent specializing in:
 

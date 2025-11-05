@@ -1,0 +1,141 @@
+version: '3.8'
+
+# Docker Compose for Storage Modes Example
+#
+# This file provides a complete PostgreSQL setup for running the
+# storage modes example in production mode.
+#
+# Usage:
+#   # Start PostgreSQL
+#   docker-compose -f examples/docker-compose.storage-example.yml up -d
+#
+#   # Run production mode example
+#   export AQE_STORAGE_MODE=production
+#   export DATABASE_URL=postgresql://qe_agent:qe_secure_password_123@localhost:5432/lionagi_qe_learning
+#   python examples/storage_modes_example.py
+#
+#   # Stop services
+#   docker-compose -f examples/docker-compose.storage-example.yml down
+
+services:
+  # PostgreSQL Database (Production Mode Backend)
+  postgres:
+    image: postgres:16-alpine
+    container_name: qe-storage-postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: lionagi_qe_learning
+      POSTGRES_USER: qe_agent
+      POSTGRES_PASSWORD: qe_secure_password_123
+
+      # Performance tuning
+      POSTGRES_SHARED_BUFFERS: 256MB
+      POSTGRES_MAX_CONNECTIONS: 200
+      POSTGRES_WORK_MEM: 8MB
+      POSTGRES_MAINTENANCE_WORK_MEM: 64MB
+      POSTGRES_EFFECTIVE_CACHE_SIZE: 1GB
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      # Persistent data storage
+      - qe_storage_data:/var/lib/postgresql/data
+
+      # Initialize schema on first run
+      - ../database/schema/qlearning_schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - ./storage_init.sql:/docker-entrypoint-initdb.d/02_storage_init.sql:ro
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U qe_agent -d lionagi_qe_learning"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+    networks:
+      - qe_network
+
+    # Resource limits (adjust based on your environment)
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+  # pgAdmin 4 (Optional - Database Management UI)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: qe-storage-pgadmin
+    restart: unless-stopped
+
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@lionagi.dev
+      PGADMIN_DEFAULT_PASSWORD: admin_secure_123
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 'False'
+
+    ports:
+      - "5050:80"
+
+    volumes:
+      - qe_pgadmin_data:/var/lib/pgadmin
+
+    networks:
+      - qe_network
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    profiles:
+      - with-pgadmin  # Optional service, enable with: --profile with-pgadmin
+
+  # Redis (Optional - High-speed Cache)
+  redis:
+    image: redis:7-alpine
+    container_name: qe-storage-redis
+    restart: unless-stopped
+
+    command: redis-server --requirepass redis_secure_password_123 --maxmemory 256mb --maxmemory-policy allkeys-lru
+
+    ports:
+      - "6379:6379"
+
+    volumes:
+      - qe_redis_data:/data
+
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+    networks:
+      - qe_network
+
+    profiles:
+      - with-redis  # Optional service, enable with: --profile with-redis
+
+volumes:
+  qe_storage_data:
+    name: qe_storage_postgres_data
+    driver: local
+
+  qe_pgadmin_data:
+    name: qe_storage_pgadmin_data
+    driver: local
+
+  qe_redis_data:
+    name: qe_storage_redis_data
+    driver: local
+
+networks:
+  qe_network:
+    name: qe_storage_network
+    driver: bridge

@@ -8,6 +8,7 @@ from .memory import QEMemory
 import logging
 import hashlib
 import json
+import warnings
 
 # Generic type for Pydantic models
 try:
@@ -49,33 +50,123 @@ class BaseQEAgent(ABC):
 
     Agents automatically integrate with:
     - LionAGI Branch for conversations
-    - Shared QE memory namespace
+    - Persistent memory backends (PostgreSQL, Redis, or in-memory)
     - Multi-model routing
     - Skill registry
+    - Q-learning (optional)
+
+    Memory Backend Options:
+        1. PostgresMemory (recommended for production):
+           - Reuses Q-learning database infrastructure
+           - ACID guarantees
+           - Full persistence
+           - Example:
+             ```python
+             from lionagi_qe.learning import DatabaseManager
+             from lionagi_qe.persistence import PostgresMemory
+
+             db_manager = DatabaseManager("postgresql://...")
+             await db_manager.connect()
+             memory = PostgresMemory(db_manager)
+             agent = BaseQEAgent(agent_id="test-gen", model=model, memory=memory)
+             ```
+
+        2. RedisMemory (high-speed cache):
+           - Sub-millisecond latency
+           - Native TTL support
+           - Optional persistence
+           - Example:
+             ```python
+             from lionagi_qe.persistence import RedisMemory
+
+             memory = RedisMemory(host="localhost")
+             agent = BaseQEAgent(agent_id="test-gen", model=model, memory=memory)
+             ```
+
+        3. Session.context (default, in-memory):
+           - Zero setup
+           - Development use
+           - No persistence
+           - Example:
+             ```python
+             agent = BaseQEAgent(agent_id="test-gen", model=model)
+             ```
+
+        4. QEMemory (deprecated):
+           - In-memory only
+           - No persistence
+           - Will show deprecation warning
     """
 
     def __init__(
         self,
         agent_id: str,
         model: iModel,
-        memory: QEMemory,
+        memory: Optional[Any] = None,
         skills: Optional[List[str]] = None,
         enable_learning: bool = False,
-        q_learning_service: Optional['QLearningService'] = None
+        q_learning_service: Optional['QLearningService'] = None,
+        memory_config: Optional[Dict[str, Any]] = None
     ):
         """Initialize QE agent
 
         Args:
             agent_id: Unique agent identifier (e.g., "test-generator")
             model: LionAGI model instance
-            memory: Shared QE memory instance
+            memory: Memory backend (None = auto-detect, QEMemory = deprecated,
+                   PostgresMemory/RedisMemory = persistent)
             skills: List of QE skills this agent uses
             enable_learning: Enable Q-learning integration
             q_learning_service: Optional Q-learning service instance
+            memory_config: Optional config for auto-initializing memory backend
+                         Example: {"type": "postgres", "db_manager": db_mgr}
+                                 {"type": "redis", "host": "localhost"}
+                                 {"type": "session"}  # Use Session.context
+
+        Examples:
+            # Option 1: Pass memory backend directly
+            memory = PostgresMemory(db_manager)
+            agent = BaseQEAgent(agent_id="test-gen", model=model, memory=memory)
+
+            # Option 2: Auto-initialize from config
+            agent = BaseQEAgent(
+                agent_id="test-gen",
+                model=model,
+                memory_config={"type": "postgres", "db_manager": db_manager}
+            )
+
+            # Option 3: Default (Session.context)
+            agent = BaseQEAgent(agent_id="test-gen", model=model)
+
+        Migration from QEMemory:
+            # Before (deprecated)
+            from lionagi_qe.core.memory import QEMemory
+            memory = QEMemory()
+            agent = BaseQEAgent(agent_id="test-gen", model=model, memory=memory)
+
+            # After - Option 1: PostgreSQL (recommended for production)
+            from lionagi_qe.learning import DatabaseManager
+            from lionagi_qe.persistence import PostgresMemory
+
+            db_manager = DatabaseManager("postgresql://...")
+            await db_manager.connect()
+            memory = PostgresMemory(db_manager)
+            agent = BaseQEAgent(agent_id="test-gen", model=model, memory=memory)
+
+            # After - Option 2: Redis (high-speed cache)
+            from lionagi_qe.persistence import RedisMemory
+            memory = RedisMemory(host="localhost")
+            agent = BaseQEAgent(agent_id="test-gen", model=model, memory=memory)
+
+            # After - Option 3: In-memory (development)
+            agent = BaseQEAgent(agent_id="test-gen", model=model)  # Uses Session.context
         """
         self.agent_id = agent_id
         self.model = model
-        self.memory = memory
+
+        # Memory initialization with backward compatibility
+        self.memory = self._initialize_memory(memory, memory_config)
+
         self.skills = skills or []
         self.enable_learning = enable_learning
 
@@ -104,6 +195,104 @@ class BaseQEAgent(ABC):
             "avg_reward": 0.0,
             "learning_episodes": 0,
         }
+
+    def _initialize_memory(
+        self,
+        memory: Optional[Any],
+        memory_config: Optional[Dict[str, Any]]
+    ) -> Any:
+        """Initialize memory backend with backward compatibility
+
+        Supports:
+        - None: Auto-detect (Session.context or from config)
+        - QEMemory: Deprecated (warn user)
+        - PostgresMemory/RedisMemory: Persistent backends
+        - Dict-like: Custom backend
+
+        Args:
+            memory: Memory instance or None
+            memory_config: Configuration for auto-initialization
+
+        Returns:
+            Memory backend instance
+        """
+        # Case 1: Memory instance provided
+        if memory is not None:
+            if isinstance(memory, QEMemory):
+                warnings.warn(
+                    f"QEMemory is deprecated and lacks persistence. "
+                    f"Consider using PostgresMemory or RedisMemory for production. "
+                    f"Agent: {self.agent_id}",
+                    DeprecationWarning,
+                    stacklevel=3
+                )
+            return memory
+
+        # Case 2: Auto-initialize from config
+        if memory_config:
+            backend_type = memory_config.get("type", "session")
+
+            if backend_type == "postgres":
+                try:
+                    from lionagi_qe.persistence import PostgresMemory
+                except ImportError:
+                    raise ImportError(
+                        "PostgresMemory requires 'lionagi-qe-fleet' package. "
+                        "Install with: pip install lionagi-qe-fleet"
+                    )
+                db_manager = memory_config.get("db_manager")
+                if not db_manager:
+                    raise ValueError("PostgresMemory requires 'db_manager' in memory_config")
+                return PostgresMemory(db_manager)
+
+            elif backend_type == "redis":
+                try:
+                    from lionagi_qe.persistence import RedisMemory
+                except ImportError:
+                    raise ImportError(
+                        "RedisMemory requires redis package. "
+                        "Install with: pip install lionagi-qe-fleet[persistence]"
+                    )
+                return RedisMemory(
+                    host=memory_config.get("host", "localhost"),
+                    port=memory_config.get("port", 6379),
+                    db=memory_config.get("db", 0),
+                    password=memory_config.get("password")
+                )
+
+            elif backend_type == "session":
+                from lionagi import Session
+                if not hasattr(self, '_session'):
+                    self._session = Session()
+                return self._session.context
+
+            else:
+                raise ValueError(f"Unknown memory backend type: {backend_type}")
+
+        # Case 3: Default to Session.context
+        from lionagi import Session
+        if not hasattr(self, '_session'):
+            self._session = Session()
+        return self._session.context
+
+    @property
+    def memory_backend_type(self) -> str:
+        """Get type of memory backend in use
+
+        Returns:
+            "postgres", "redis", "qememory", "session", or "custom"
+        """
+        if hasattr(self.memory, '__class__'):
+            class_name = self.memory.__class__.__name__
+            if class_name == "PostgresMemory":
+                return "postgres"
+            elif class_name == "RedisMemory":
+                return "redis"
+            elif class_name == "QEMemory":
+                return "qememory"
+            elif "Session" in str(type(self.memory)) or "Context" in class_name:
+                return "session"
+        return "custom"
 
     @abstractmethod
     def get_system_prompt(self) -> str:

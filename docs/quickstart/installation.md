@@ -110,7 +110,7 @@ os.environ["ANTHROPIC_API_KEY"] = "sk-ant-your-anthropic-key-here"
 
 ```python
 import lionagi
-from lionagi_qe import QEFleet
+from lionagi_qe import QEOrchestrator
 from lionagi_qe.agents import TestGeneratorAgent
 
 print(f"LionAGI version: {lionagi.__version__}")
@@ -122,12 +122,12 @@ print("QE Fleet imported successfully!")
 ```python
 import asyncio
 from lionagi import iModel
-from lionagi_qe import QEFleet
+from lionagi_qe import QEOrchestrator
 
 async def test_installation():
-    fleet = QEFleet()
-    await fleet.initialize()
-    print("QE Fleet initialized successfully!")
+    orchestrator = QEOrchestrator()
+    await orchestrator.initialize()
+    print("QE Orchestrator initialized successfully!")
 
     # Test model connection
     model = iModel(provider="openai", model="gpt-3.5-turbo")
@@ -138,8 +138,108 @@ asyncio.run(test_installation())
 
 Expected output:
 ```
-QE Fleet initialized successfully!
+QE Orchestrator initialized successfully!
 Model configured: openai/gpt-3.5-turbo
+```
+
+### Test 3: Persistence Test (Optional)
+
+```python
+import asyncio
+from lionagi_qe import QEOrchestrator
+
+async def test_persistence():
+    # Test PostgreSQL connection
+    orchestrator = QEOrchestrator(
+        memory_backend="postgres",
+        postgres_url="postgresql://qe_user:secure_password@localhost:5432/lionagi_qe"
+    )
+    await orchestrator.initialize()
+
+    # Store and retrieve test data
+    await orchestrator.memory.store("test/key", {"value": "hello"})
+    data = await orchestrator.memory.retrieve("test/key")
+
+    print(f"Persistence test: {data}")  # Should print: {'value': 'hello'}
+    print("Persistence working!")
+
+asyncio.run(test_persistence())
+```
+
+## Persistence Setup (Production)
+
+For production environments with persistent memory, you need a database backend.
+
+### PostgreSQL Backend (Recommended)
+
+**Install Dependencies:**
+```bash
+pip install lionagi-qe-fleet[postgres]
+# or manually:
+pip install asyncpg
+```
+
+**Setup PostgreSQL:**
+```bash
+# Using Docker (recommended)
+docker run -d \
+  --name lionagi-qe-postgres \
+  -e POSTGRES_DB=lionagi_qe \
+  -e POSTGRES_USER=qe_user \
+  -e POSTGRES_PASSWORD=secure_password \
+  -p 5432:5432 \
+  postgres:16-alpine
+
+# Initialize schema (reuses Q-Learning database!)
+python -m lionagi_qe.persistence.init_db
+```
+
+**Configuration:**
+```bash
+# Add to .env file
+POSTGRES_URL=postgresql://qe_user:secure_password@localhost:5432/lionagi_qe
+```
+
+**Benefits:**
+- Reuses existing Q-Learning PostgreSQL infrastructure
+- No additional database needed
+- ACID compliance
+- Production-ready
+
+### Redis Backend (Fast, Ephemeral)
+
+**Install Dependencies:**
+```bash
+pip install lionagi-qe-fleet[redis]
+# or manually:
+pip install redis aioredis
+```
+
+**Setup Redis:**
+```bash
+# Using Docker
+docker run -d --name lionagi-qe-redis -p 6379:6379 redis:7-alpine
+```
+
+**Configuration:**
+```bash
+# Add to .env file
+REDIS_URL=redis://localhost:6379/0
+```
+
+**Benefits:**
+- High-speed caching
+- Good for distributed systems
+- Simple setup
+
+### In-Memory (Development)
+
+No setup needed - this is the default:
+```python
+from lionagi_qe import QEOrchestrator
+
+orchestrator = QEOrchestrator(memory_backend="memory")
+# Fast, no dependencies, data lost on restart
 ```
 
 ## Optional Dependencies
@@ -178,6 +278,13 @@ Includes:
 - mkdocs
 - mkdocs-material
 - mkdocstrings
+
+### All Extras
+
+```bash
+# Install everything (dev + postgres + redis)
+pip install lionagi-qe-fleet[all]
+```
 
 ## Configuration Options
 

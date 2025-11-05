@@ -1,6 +1,6 @@
 """QE Fleet orchestration and coordination"""
 
-from typing import List, Dict, Any, Optional, Callable
+from typing import List, Dict, Any, Optional, Callable, Union
 from lionagi import Builder, Session
 from lionagi.operations import ExpansionStrategy
 from .base_agent import BaseQEAgent
@@ -19,23 +19,99 @@ class QEOrchestrator:
     - Parallel multi-agent execution
     - Workflow graph building
     - Session management
+    - Environment-based storage mode selection
+
+    Storage Modes:
+        - DEV: Session.context (zero setup, in-memory)
+        - TEST: Session.context (isolated, fast tests)
+        - PROD: PostgresMemory (durable, ACID guarantees)
+
+    Usage:
+        # Option 1: Auto-detect from environment
+        orchestrator = QEOrchestrator.from_environment()
+
+        # Option 2: Explicit mode
+        orchestrator = QEOrchestrator(mode="production", database_url="postgresql://...")
+
+        # Option 3: Traditional (backward compatible)
+        memory = QEMemory()
+        router = ModelRouter()
+        orchestrator = QEOrchestrator(memory=memory, router=router)
     """
 
     def __init__(
         self,
-        memory: QEMemory,
-        router: ModelRouter,
-        enable_learning: bool = False
+        memory: Optional[QEMemory] = None,
+        router: Optional[ModelRouter] = None,
+        enable_learning: bool = False,
+        mode: Optional[Union[str, "StorageMode"]] = None,
+        database_url: Optional[str] = None,
+        storage_config: Optional["StorageConfig"] = None
     ):
         """Initialize orchestrator
 
         Args:
-            memory: Shared QE memory instance
-            router: Multi-model router
+            memory: Shared QE memory instance (None = auto-detect from mode)
+            router: Multi-model router (None = create default)
             enable_learning: Enable Q-learning across fleet
+            mode: Storage mode (dev/test/prod) - auto-detects if not provided
+            database_url: PostgreSQL URL (required for prod mode)
+            storage_config: StorageConfig instance (overrides mode/database_url)
+
+        Examples:
+            # Development (default)
+            orchestrator = QEOrchestrator()
+
+            # Testing
+            orchestrator = QEOrchestrator(mode="test")
+
+            # Production
+            orchestrator = QEOrchestrator(
+                mode="prod",
+                database_url="postgresql://user:pass@localhost:5432/db"
+            )
+
+            # From config
+            config = StorageConfig.from_environment()
+            orchestrator = QEOrchestrator.from_config(config)
         """
-        self.memory = memory
-        self.router = router
+        # Initialize storage configuration
+        if storage_config:
+            self.storage_config = storage_config
+        elif mode or database_url:
+            # Create config from parameters
+            from ..config import StorageMode, StorageConfig
+
+            if isinstance(mode, str):
+                mode = StorageMode.from_string(mode)
+            elif mode is None:
+                mode = StorageMode.DEV
+
+            self.storage_config = StorageConfig(
+                mode=mode,
+                database_url=database_url
+            )
+        elif memory is None:
+            # No explicit config or memory - auto-detect from environment
+            from ..config import StorageConfig
+            self.storage_config = StorageConfig.from_environment()
+        else:
+            # Legacy mode - memory provided directly
+            self.storage_config = None
+
+        # Initialize memory backend
+        if memory is not None:
+            # Legacy: explicit memory provided
+            self.memory = memory
+        elif self.storage_config:
+            # Modern: auto-initialize from config
+            self.memory = self._initialize_memory_from_config()
+        else:
+            # Fallback: default QEMemory
+            self.memory = QEMemory()
+
+        # Initialize router
+        self.router = router or ModelRouter()
         self.enable_learning = enable_learning
 
         # Agent registry
@@ -47,6 +123,18 @@ class QEOrchestrator:
         # Logger
         self.logger = logging.getLogger("lionagi_qe.orchestrator")
 
+        # Log configuration
+        if self.storage_config:
+            self.logger.info(
+                f"QEOrchestrator initialized with storage mode: "
+                f"{self.storage_config.mode.value}"
+            )
+            self.logger.debug(
+                f"Storage configuration:\n{self.storage_config.get_description()}"
+            )
+        else:
+            self.logger.info("QEOrchestrator initialized with custom memory backend")
+
         # Orchestration metrics
         self.metrics = {
             "workflows_executed": 0,
@@ -57,6 +145,257 @@ class QEOrchestrator:
             "fan_out_fan_in_executed": 0,
             "conditional_workflows": 0,
         }
+
+    def _initialize_memory_from_config(self) -> Any:
+        """Initialize memory backend from storage configuration
+
+        Returns:
+            Memory backend instance based on configuration
+
+        Raises:
+            ValueError: If configuration is invalid
+        """
+        from ..config import StorageMode
+
+        if self.storage_config.mode in (StorageMode.DEV, StorageMode.TEST):
+            # Use Session.context (in-memory)
+            self.logger.info("Using Session.context for in-memory storage")
+            return self.session.context
+
+        elif self.storage_config.mode == StorageMode.PROD:
+            # Use PostgresMemory
+            try:
+                from ..learning import DatabaseManager
+                from ..persistence import PostgresMemory
+            except ImportError as e:
+                raise ImportError(
+                    "Production mode requires lionagi-qe-fleet package with PostgreSQL support. "
+                    "Install with: pip install lionagi-qe-fleet"
+                ) from e
+
+            self.logger.info(
+                f"Initializing PostgresMemory with database: "
+                f"{self.storage_config._extract_host_from_url(self.storage_config.database_url)}"
+            )
+
+            # Create database manager
+            self.db_manager = DatabaseManager(
+                database_url=self.storage_config.database_url,
+                min_connections=self.storage_config.min_connections,
+                max_connections=self.storage_config.max_connections,
+                connection_timeout=self.storage_config.connection_timeout,
+                pool_recycle=self.storage_config.pool_recycle
+            )
+
+            # Note: Connection must be established by caller using connect()
+            # This keeps __init__ synchronous
+            self.logger.info(
+                "DatabaseManager created. Call orchestrator.connect() to establish connection."
+            )
+
+            return PostgresMemory(self.db_manager)
+
+        else:
+            raise ValueError(f"Unknown storage mode: {self.storage_config.mode}")
+
+    @classmethod
+    def from_environment(cls, enable_learning: bool = False) -> "QEOrchestrator":
+        """Create orchestrator by auto-detecting environment
+
+        Reads environment variables to determine storage mode:
+        - AQE_STORAGE_MODE, ENVIRONMENT, NODE_ENV
+        - DATABASE_URL (for production)
+        - Connection pool settings
+
+        Args:
+            enable_learning: Enable Q-learning across fleet
+
+        Returns:
+            QEOrchestrator configured for current environment
+
+        Example:
+            ```bash
+            # Development (default)
+            export ENVIRONMENT=development
+            orchestrator = QEOrchestrator.from_environment()
+
+            # Production
+            export ENVIRONMENT=production
+            export DATABASE_URL=postgresql://user:pass@localhost:5432/db
+            orchestrator = QEOrchestrator.from_environment()
+            await orchestrator.connect()
+            ```
+        """
+        from ..config import StorageConfig
+
+        config = StorageConfig.from_environment()
+        return cls.from_config(config, enable_learning=enable_learning)
+
+    @classmethod
+    def from_config(
+        cls,
+        config: "StorageConfig",
+        enable_learning: bool = False
+    ) -> "QEOrchestrator":
+        """Create orchestrator from storage configuration
+
+        Args:
+            config: StorageConfig instance
+            enable_learning: Enable Q-learning across fleet
+
+        Returns:
+            QEOrchestrator configured according to config
+
+        Example:
+            ```python
+            from lionagi_qe.config import StorageConfig
+
+            # Development
+            config = StorageConfig.for_development()
+            orchestrator = QEOrchestrator.from_config(config)
+
+            # Production
+            config = StorageConfig.for_production(
+                database_url="postgresql://..."
+            )
+            orchestrator = QEOrchestrator.from_config(config)
+            await orchestrator.connect()
+            ```
+        """
+        return cls(
+            storage_config=config,
+            enable_learning=enable_learning
+        )
+
+    async def connect(self):
+        """Connect to storage backend (required for production mode)
+
+        For production mode with PostgreSQL, this establishes the database
+        connection pool. For dev/test modes, this is a no-op.
+
+        Example:
+            ```python
+            orchestrator = QEOrchestrator(mode="prod", database_url="postgresql://...")
+            await orchestrator.connect()
+            # Now ready to use
+            ```
+        """
+        if hasattr(self, 'db_manager'):
+            self.logger.info("Connecting to PostgreSQL database...")
+            await self.db_manager.connect()
+            self.logger.info("Database connection established")
+        else:
+            self.logger.debug("No database connection required for current mode")
+
+    async def disconnect(self):
+        """Disconnect from storage backend
+
+        Cleanly closes database connections and releases resources.
+
+        Example:
+            ```python
+            try:
+                await orchestrator.connect()
+                # ... use orchestrator ...
+            finally:
+                await orchestrator.disconnect()
+            ```
+        """
+        if hasattr(self, 'db_manager'):
+            self.logger.info("Closing database connections...")
+            await self.db_manager.close()
+            self.logger.info("Database connections closed")
+        else:
+            self.logger.debug("No database connection to close")
+
+    def get_memory_config_for_agents(self) -> Dict[str, Any]:
+        """Get memory configuration for registering agents
+
+        Returns configuration dict suitable for passing to BaseQEAgent's
+        memory_config parameter when registering agents.
+
+        Returns:
+            Dict with memory backend configuration
+
+        Example:
+            ```python
+            orchestrator = QEOrchestrator.from_environment()
+            memory_config = orchestrator.get_memory_config_for_agents()
+
+            agent = TestGeneratorAgent(
+                agent_id="test-gen",
+                model=model,
+                memory_config=memory_config
+            )
+            orchestrator.register_agent(agent)
+            ```
+        """
+        if self.storage_config:
+            return self.storage_config.get_memory_backend_config()
+        else:
+            # Legacy mode - agents will use provided memory directly
+            return {"type": "custom"}
+
+    def create_and_register_agent(
+        self,
+        agent_class: type[BaseQEAgent],
+        agent_id: str,
+        model: Any,
+        **kwargs
+    ) -> BaseQEAgent:
+        """Create an agent with shared memory backend and register it
+
+        This is a convenience method that creates an agent with the orchestrator's
+        memory backend configuration and immediately registers it.
+
+        Args:
+            agent_class: Agent class to instantiate (e.g., TestGeneratorAgent)
+            agent_id: Unique agent identifier
+            model: LionAGI model instance
+            **kwargs: Additional arguments passed to agent constructor
+
+        Returns:
+            Created and registered agent instance
+
+        Example:
+            ```python
+            from lionagi_qe.agents import TestGeneratorAgent, CoverageAnalyzerAgent
+
+            orchestrator = QEOrchestrator.from_environment()
+            await orchestrator.connect()
+
+            # Create agents with shared memory backend
+            test_gen = orchestrator.create_and_register_agent(
+                TestGeneratorAgent,
+                agent_id="test-generator",
+                model=model
+            )
+
+            coverage = orchestrator.create_and_register_agent(
+                CoverageAnalyzerAgent,
+                agent_id="coverage-analyzer",
+                model=model
+            )
+
+            # Agents automatically share the same memory backend
+            ```
+        """
+        # Get memory config if not explicitly provided
+        if "memory" not in kwargs and "memory_config" not in kwargs:
+            # Pass memory backend directly for efficiency
+            kwargs["memory"] = self.memory
+
+        # Create agent
+        agent = agent_class(
+            agent_id=agent_id,
+            model=model,
+            **kwargs
+        )
+
+        # Register
+        self.register_agent(agent)
+
+        return agent
 
     def register_agent(self, agent: BaseQEAgent):
         """Register a QE agent

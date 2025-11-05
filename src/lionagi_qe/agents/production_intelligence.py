@@ -185,6 +185,37 @@ class ProductionIntelligenceAgent(BaseQEAgent):
     - User journey reconstruction and E2E test creation
     """
 
+    def __init__(
+        self,
+        agent_id: str,
+        model: Any,
+        memory: Optional[Any] = None,
+        skills: Optional[List[str]] = None,
+        enable_learning: bool = False,
+        q_learning_service: Optional[Any] = None,
+        memory_config: Optional[Dict[str, Any]] = None
+    ):
+        """Initialize ProductionIntelligence Agent
+
+        Args:
+            agent_id: Unique agent identifier
+            model: LionAGI model instance
+            memory: Memory backend (PostgresMemory/RedisMemory/QEMemory or None for Session.context)
+            skills: List of QE skills this agent uses
+            enable_learning: Enable Q-learning integration
+            q_learning_service: Optional Q-learning service instance
+            memory_config: Optional config for auto-initializing memory backend
+        """
+        super().__init__(
+            agent_id=agent_id,
+            model=model,
+            memory=memory,
+            skills=skills or ['agentic-quality-engineering', 'shift-right-testing', 'test-design-techniques'],
+            enable_learning=enable_learning,
+            q_learning_service=q_learning_service,
+            memory_config=memory_config
+        )
+
     def get_system_prompt(self) -> str:
         return """You are an expert production intelligence agent specializing in:
 

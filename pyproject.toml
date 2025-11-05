@@ -1,6 +1,6 @@
 [project]
 name = "lionagi-qe-fleet"
-version = "1.0.2"
+version = "1.1.0"
 description = "Agentic Quality Engineering Fleet powered by LionAGI - 19 specialized AI agents for comprehensive software testing and quality assurance"
 authors = [
     { name = "LionAGI QE Fleet Contributors" },
@@ -77,10 +77,15 @@ mcp = [
     "mcp>=0.1.0",
 ]
 
+persistence = [
+    "redis>=5.0.0",
+]
+
 all = [
     "lionagi-qe-fleet[dev]",
     "lionagi-qe-fleet[performance]",
     "lionagi-qe-fleet[mcp]",
+    "lionagi-qe-fleet[persistence]",
 ]
 
 [build-system]

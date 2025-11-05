@@ -1,6 +1,6 @@
 """Fleet Commander Agent - Hierarchical coordination of QE operations"""
 
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from pydantic import BaseModel, Field
 from lionagi_qe.core.base_agent import BaseQEAgent
 from lionagi_qe.core.task import QETask
@@ -34,6 +34,37 @@ class FleetCommanderAgent(BaseQEAgent):
     - Progress monitoring
     - Result synthesis
     """
+
+    def __init__(
+        self,
+        agent_id: str,
+        model: Any,
+        memory: Optional[Any] = None,
+        skills: Optional[List[str]] = None,
+        enable_learning: bool = False,
+        q_learning_service: Optional[Any] = None,
+        memory_config: Optional[Dict[str, Any]] = None
+    ):
+        """Initialize FleetCommander Agent
+
+        Args:
+            agent_id: Unique agent identifier
+            model: LionAGI model instance
+            memory: Memory backend (PostgresMemory/RedisMemory/QEMemory or None for Session.context)
+            skills: List of QE skills this agent uses
+            enable_learning: Enable Q-learning integration
+            q_learning_service: Optional Q-learning service instance
+            memory_config: Optional config for auto-initializing memory backend
+        """
+        super().__init__(
+            agent_id=agent_id,
+            model=model,
+            memory=memory,
+            skills=skills or ['agentic-quality-engineering', 'holistic-testing-pact', 'consultancy-practices'],
+            enable_learning=enable_learning,
+            q_learning_service=q_learning_service,
+            memory_config=memory_config
+        )
 
     def get_system_prompt(self) -> str:
         return """You are the Fleet Commander coordinating QE operations.

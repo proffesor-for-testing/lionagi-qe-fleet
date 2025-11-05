@@ -40,31 +40,23 @@ Create `my_first_agent.py`:
 ```python
 import asyncio
 from lionagi import iModel
-from lionagi_qe import QEFleet, QETask
+from lionagi_qe import QETask
 from lionagi_qe.agents import TestGeneratorAgent
 
 
 async def main():
-    # Step 1: Initialize the QE Fleet
-    # The fleet manages agents and provides shared memory
-    fleet = QEFleet(enable_routing=True)
-    await fleet.initialize()
-
-    # Step 2: Create a model
+    # Step 1: Create a model
     # Using GPT-4o-mini for cost-effective test generation
     model = iModel(provider="openai", model="gpt-4o-mini")
 
-    # Step 3: Create a test generator agent
+    # Step 2: Create a test generator agent
+    # No fleet or shared memory needed for single agent
     test_gen = TestGeneratorAgent(
         agent_id="test-generator",
-        model=model,
-        memory=fleet.memory
+        model=model
     )
 
-    # Step 4: Register the agent with the fleet
-    fleet.register_agent(test_gen)
-
-    # Step 5: Define code to test
+    # Step 3: Define code to test
     code_to_test = """
 def add(a: int, b: int) -> int:
     '''Add two numbers and return the result.'''
@@ -77,7 +69,7 @@ def divide(a: float, b: float) -> float:
     return a / b
 """
 
-    # Step 6: Create a task
+    # Step 4: Create a task
     task = QETask(
         task_type="generate_tests",
         context={
@@ -86,11 +78,11 @@ def divide(a: float, b: float) -> float:
         }
     )
 
-    # Step 7: Execute the agent
+    # Step 5: Execute the agent
     print("Generating tests...")
-    result = await fleet.execute("test-generator", task)
+    result = await test_gen.execute(task)
 
-    # Step 8: Display results
+    # Step 6: Display results
     print("\n" + "=" * 60)
     print(f"Test Name: {result.test_name}")
     print("=" * 60)
@@ -168,14 +160,6 @@ Edge Cases Covered: 4
 
 Let's break down what happened:
 
-### Fleet Initialization
-```python
-fleet = QEFleet(enable_routing=True)
-await fleet.initialize()
-```
-- Creates a fleet to manage agents
-- `enable_routing=True` enables intelligent model selection (up to 80% theoretical cost savings)
-
 ### Model Creation
 ```python
 model = iModel(provider="openai", model="gpt-4o-mini")
@@ -188,13 +172,13 @@ model = iModel(provider="openai", model="gpt-4o-mini")
 ```python
 test_gen = TestGeneratorAgent(
     agent_id="test-generator",
-    model=model,
-    memory=fleet.memory
+    model=model
 )
 ```
 - Creates a specialized test generation agent
 - `agent_id` uniquely identifies this agent
-- `memory=fleet.memory` enables agent coordination
+- No shared memory needed for single agent usage
+- Simple and direct - no orchestration overhead
 
 ### Task Execution
 ```python
@@ -202,11 +186,30 @@ task = QETask(
     task_type="generate_tests",
     context={"code": code_to_test, "framework": "pytest"}
 )
-result = await fleet.execute("test-generator", task)
+result = await test_gen.execute(task)
 ```
 - Creates a task with context (code + framework)
 - Executes asynchronously (use `await`)
 - Returns structured results (Pydantic model)
+- Direct agent execution - no fleet wrapper needed
+
+### When to Use QEOrchestrator?
+
+For **multi-agent workflows** or **persistent memory**, use QEOrchestrator:
+
+```python
+from lionagi_qe import QEOrchestrator
+
+orchestrator = QEOrchestrator(
+    memory_backend="postgres",  # Persistent storage
+    enable_routing=True  # Intelligent model selection
+)
+await orchestrator.initialize()
+
+# Register and execute
+orchestrator.register_agent(test_gen)
+result = await orchestrator.execute_agent("test-generator", task)
+```
 
 ## Step 5: Experiment
 

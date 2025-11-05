@@ -23,31 +23,34 @@ Execute agents in sequence, where each agent builds on the previous agent's work
 ```python
 import asyncio
 from lionagi import iModel
-from lionagi_qe import QEFleet
+from lionagi_qe import QEOrchestrator
 from lionagi_qe.agents import TestGeneratorAgent, TestExecutorAgent
 
 async def main():
-    # Initialize fleet
-    fleet = QEFleet(enable_routing=True)
-    await fleet.initialize()
+    # Initialize orchestrator (with optional persistence)
+    orchestrator = QEOrchestrator(
+        memory_backend="postgres",  # or "memory" for dev
+        enable_routing=True
+    )
+    await orchestrator.initialize()
 
     # Create model
     model = iModel(provider="openai", model="gpt-4o-mini")
 
-    # Register agents
+    # Register agents (they share orchestrator's memory)
     test_gen = TestGeneratorAgent(
         agent_id="test-generator",
         model=model,
-        memory=fleet.memory
+        memory=orchestrator.memory
     )
     test_exec = TestExecutorAgent(
         agent_id="test-executor",
         model=model,
-        memory=fleet.memory
+        memory=orchestrator.memory
     )
 
-    fleet.register_agent(test_gen)
-    fleet.register_agent(test_exec)
+    orchestrator.register_agent(test_gen)
+    orchestrator.register_agent(test_exec)
 
     # Define pipeline (order matters!)
     pipeline = ["test-generator", "test-executor"]
@@ -65,8 +68,8 @@ def fibonacci(n: int) -> int:
         "test_path": "./tests/test_fibonacci.py"
     }
 
-    # Execute pipeline
-    result = await fleet.execute_pipeline(pipeline, context)
+    # Execute pipeline (results persist if using postgres backend)
+    result = await orchestrator.execute_pipeline(pipeline, context)
 
     print("Pipeline complete!")
     print(f"Results: {result}")
@@ -93,13 +96,13 @@ Execute multiple agents simultaneously for independent tasks.
 ```python
 import asyncio
 from lionagi import iModel
-from lionagi_qe import QEFleet, QETask
+from lionagi_qe import QEOrchestrator, QETask
 from lionagi_qe.agents import TestGeneratorAgent
 
 async def main():
-    # Initialize fleet
-    fleet = QEFleet(enable_routing=True)
-    await fleet.initialize()
+    # Initialize orchestrator
+    orchestrator = QEOrchestrator(enable_routing=True)
+    await orchestrator.initialize()
 
     model = iModel(provider="openai", model="gpt-4o-mini")
 
@@ -108,22 +111,22 @@ async def main():
         TestGeneratorAgent(
             agent_id="test-generator-unit",
             model=model,
-            memory=fleet.memory
+            memory=orchestrator.memory
         ),
         TestGeneratorAgent(
             agent_id="test-generator-integration",
             model=model,
-            memory=fleet.memory
+            memory=orchestrator.memory
         ),
         TestGeneratorAgent(
             agent_id="test-generator-e2e",
             model=model,
-            memory=fleet.memory
+            memory=orchestrator.memory
         ),
     ]
 
     for agent in agents:
-        fleet.register_agent(agent)
+        orchestrator.register_agent(agent)
 
     # Three independent tasks
     agent_ids = [
@@ -154,7 +157,7 @@ async def main():
     ]
 
     # Execute all three simultaneously
-    results = await fleet.execute_parallel(agent_ids, tasks)
+    results = await orchestrator.execute_parallel(agent_ids, tasks)
 
     print(f"Generated {len(results)} test suites in parallel")
     for agent_id, result in zip(agent_ids, results):
