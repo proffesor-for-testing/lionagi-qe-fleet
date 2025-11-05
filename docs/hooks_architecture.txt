@@ -1,0 +1,284 @@
+# QE Fleet Hooks System Architecture
+
+## High-Level Overview
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                            QE Fleet                                     │
+│                                                                         │
+│  ┌──────────────────────────────────────────────────────────────────┐  │
+│  │                         Initialization                           │  │
+│  │                                                                  │  │
+│  │  QEFleet(enable_hooks=True) ────▶ QEHooks(fleet_id)            │  │
+│  │                                        │                         │  │
+│  │                                        ▼                         │  │
+│  │                              HookRegistry.create()              │  │
+│  │                                        │                         │  │
+│  │                                        ▼                         │  │
+│  │                    Pass to ModelRouter(hooks=...)               │  │
+│  └──────────────────────────────────────────────────────────────────┘  │
+│                                                                         │
+│  ┌──────────────────────────────────────────────────────────────────┐  │
+│  │                       Model Router                               │  │
+│  │                                                                  │  │
+│  │  hook_registry = hooks.create_registry()                       │  │
+│  │                                                                  │  │
+│  │  iModel("simple", hook_registry=registry)     ◀─┐              │  │
+│  │  iModel("moderate", hook_registry=registry)   ◀─┤              │  │
+│  │  iModel("complex", hook_registry=registry)    ◀─┼─ All models  │  │
+│  │  iModel("critical", hook_registry=registry)   ◀─┤   get hooks  │  │
+│  │  iModel("analyzer", hook_registry=registry)   ◀─┘              │  │
+│  └──────────────────────────────────────────────────────────────────┘  │
+│                                                                         │
+│  ┌──────────────────────────────────────────────────────────────────┐  │
+│  │                     Hook Execution Flow                          │  │
+│  │                                                                  │  │
+│  │  1. Agent calls model ────▶ PRE_INVOCATION_HOOK                │  │
+│  │                                    │                             │  │
+│  │                                    ▼                             │  │
+│  │                         Log call details                        │  │
+│  │                         Increment counter                       │  │
+│  │                         Store in history                        │  │
+│  │                                    │                             │  │
+│  │                                    ▼                             │  │
+│  │  2. Model processes ────▶   AI EXECUTION                        │  │
+│  │                                    │                             │  │
+│  │                                    ▼                             │  │
+│  │  3. Model returns ────▶    POST_INVOCATION_HOOK                 │  │
+│  │                                    │                             │  │
+│  │                                    ▼                             │  │
+│  │                         Track tokens                            │  │
+│  │                         Calculate cost                          │  │
+│  │                         Aggregate metrics                       │  │
+│  │                         Check alerts                            │  │
+│  └──────────────────────────────────────────────────────────────────┘  │
+│                                                                         │
+│  ┌──────────────────────────────────────────────────────────────────┐  │
+│  │                    Metrics Storage                               │  │
+│  │                                                                  │  │
+│  │  ┌────────────────┐    ┌────────────────┐    ┌──────────────┐  │  │
+│  │  │   By Agent     │    │   By Model     │    │ By Provider  │  │  │
+│  │  │                │    │                │    │              │  │  │
+│  │  │ test-generator │    │ gpt-3.5-turbo  │    │   openai     │  │  │
+│  │  │ coverage-...   │    │ gpt-4          │    │   anthropic  │  │  │
+│  │  │ security-...   │    │ claude-sonnet  │    │              │  │  │
+│  │  └────────────────┘    └────────────────┘    └──────────────┘  │  │
+│  │                                                                  │  │
+│  │  ┌────────────────────────────────────────────────────────────┐ │  │
+│  │  │              Aggregated Metrics                            │ │  │
+│  │  │  • Total cost          • Token usage                       │ │  │
+│  │  │  • Call count          • Session duration                  │ │  │
+│  │  │  • Avg cost/call       • Cost alerts                       │ │  │
+│  │  └────────────────────────────────────────────────────────────┘ │  │
+│  └──────────────────────────────────────────────────────────────────┘  │
+│                                                                         │
+│  ┌──────────────────────────────────────────────────────────────────┐  │
+│  │                    Access Methods                                │  │
+│  │                                                                  │  │
+│  │  fleet.get_metrics()        ───▶  Full metrics dictionary       │  │
+│  │  fleet.get_call_count()     ───▶  Total AI calls                │  │
+│  │  fleet.get_cost_summary()   ───▶  Human-readable summary        │  │
+│  │  fleet.get_dashboard()      ───▶  ASCII dashboard               │  │
+│  │  fleet.export_hooks_metrics() ─▶  JSON/Summary export           │  │
+│  │  fleet.reset_metrics()      ───▶  Reset all counters            │  │
+│  └──────────────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────────┘
+
+
+## Data Flow Diagram
+
+┌─────────────────────────────────────────────────────────────────────┐
+│                          AI Call Flow                               │
+└─────────────────────────────────────────────────────────────────────┘
+
+Agent Request
+     │
+     ▼
+┌──────────────────────┐
+│  PRE INVOCATION      │
+│  • Log call          │  Context: {agent_id, task_type}
+│  • Count++           │  Event: {provider, model}
+│  • Save history      │
+└──────────────────────┘
+     │
+     ▼
+┌──────────────────────┐
+│  AI Model            │
+│  (GPT-4, Claude,     │  Processing...
+│   GPT-3.5, etc.)     │
+└──────────────────────┘
+     │
+     ▼
+┌──────────────────────┐
+│  POST INVOCATION     │
+│  • Track tokens      │  Usage: {input, output, total}
+│  • Calculate cost    │  Cost: {estimated or actual}
+│  • Update metrics    │  Aggregate: {by_agent, by_model, by_provider}
+│  • Check alerts      │  Threshold: $X.XX
+└──────────────────────┘
+     │
+     ▼
+Response to Agent
+
+
+## Metrics Aggregation
+
+┌─────────────────────────────────────────────────────────────┐
+│                    Cost Tracker Structure                   │
+└─────────────────────────────────────────────────────────────┘
+
+cost_tracker = {
+    "total": 0.2661,                    ◀─── Top-level total
+
+    "by_agent": {                       ◀─── Per-agent breakdown
+        "test-generator": {
+            "total_cost": 0.009,
+            "call_count": 5,
+            "total_tokens": 8000
+        },
+        "coverage-analyzer": {...},
+        "security-scanner": {...}
+    },
+
+    "by_model": {                       ◀─── Per-model breakdown
+        "openai/gpt-3.5-turbo": {...},
+        "openai/gpt-4": {...},
+        "anthropic/claude-3-5-sonnet-20241022": {...}
+    },
+
+    "by_provider": {                    ◀─── Per-provider breakdown
+        "openai": {
+            "total_cost": 0.225,
+            "call_count": 8,
+            "total_tokens": 13250
+        },
+        "anthropic": {...}
+    }
+}
+
+
+## Integration Points
+
+┌─────────────────────────────────────────────────────────────┐
+│              QEFleet Initialization Sequence                │
+└─────────────────────────────────────────────────────────────┘
+
+QEFleet.__init__()
+    │
+    ├─▶ Create QEHooks(fleet_id, threshold)
+    │        │
+    │        └─▶ Initialize cost_tracker = {}
+    │             Initialize call_count = 0
+    │             Initialize token_usage = {}
+    │
+    ├─▶ Create ModelRouter(enable_routing, hooks)
+    │        │
+    │        ├─▶ hooks.create_registry()
+    │        │        │
+    │        │        └─▶ HookRegistry({
+    │        │               PreInvocation: hooks.pre_invocation_hook,
+    │        │               PostInvocation: hooks.post_invocation_hook
+    │        │            })
+    │        │
+    │        └─▶ Attach registry to all 5 models
+    │             • iModel("simple", hook_registry=registry)
+    │             • iModel("moderate", hook_registry=registry)
+    │             • iModel("complex", hook_registry=registry)
+    │             • iModel("critical", hook_registry=registry)
+    │             • iModel("analyzer", hook_registry=registry)
+    │
+    └─▶ Create QEOrchestrator(memory, router, learning)
+
+
+## Hook Event Lifecycle
+
+┌────────────────────────────────────────────────────────────┐
+│                  Hook Event Timeline                       │
+└────────────────────────────────────────────────────────────┘
+
+Time   Event
+─────  ───────────────────────────────────────────────────────
+T0     Agent prepares request
+       ├─ instruction: "Generate tests"
+       ├─ context: {code: "...", framework: "pytest"}
+       └─ agent_id: "test-generator"
+
+T1     PRE_INVOCATION_HOOK fires
+       ├─ Log: "AI Call #1: openai/gpt-3.5-turbo - Agent: test-generator"
+       ├─ call_count += 1
+       └─ call_history.append({...})
+
+T2     Model processes request
+       ├─ Token estimation
+       ├─ Generation
+       └─ Response formulation
+
+T3     POST_INVOCATION_HOOK fires
+       ├─ Extract usage: {input: 500, output: 800, total: 1300}
+       ├─ Calculate/estimate cost: $0.0018
+       ├─ Update cost_tracker["total"] += 0.0018
+       ├─ Update cost_tracker["by_agent"]["test-generator"]
+       ├─ Update cost_tracker["by_model"]["openai/gpt-3.5-turbo"]
+       ├─ Update token_usage (cumulative)
+       ├─ Check alert threshold
+       └─ Update call_history with results
+
+T4     Response returned to agent
+
+
+## Cost Estimation Formula
+
+┌────────────────────────────────────────────────────────────┐
+│              Cost Calculation Logic                        │
+└────────────────────────────────────────────────────────────┘
+
+If usage.total_cost exists:
+    cost = usage.total_cost                 # Use actual cost from API
+
+Else:
+    # Estimate based on token counts and pricing table
+    input_cost = (input_tokens / 1_000_000) × pricing[provider][model]["input"]
+    output_cost = (output_tokens / 1_000_000) × pricing[provider][model]["output"]
+    cost = input_cost + output_cost
+
+Example:
+    Model: gpt-3.5-turbo
+    Input tokens: 500
+    Output tokens: 800
+
+    Input cost = (500 / 1,000,000) × $0.50 = $0.00025
+    Output cost = (800 / 1,000,000) × $1.50 = $0.00120
+    Total cost = $0.00145
+
+
+## Alert System Flow
+
+┌────────────────────────────────────────────────────────────┐
+│              Cost Alert Mechanism                          │
+└────────────────────────────────────────────────────────────┘
+
+POST_INVOCATION_HOOK
+    │
+    ├─▶ Update cost_tracker["total"]
+    │
+    ├─▶ Check: total >= cost_alert_threshold?
+    │       │
+    │       Yes ──▶ Check: already alerted for this threshold?
+    │       │           │
+    │       │           No ──▶ Trigger Alert
+    │       │           │      ├─ Log warning
+    │       │           │      ├─ Store alert details
+    │       │           │      └─ alerts_triggered += 1
+    │       │           │
+    │       │           Yes ──▶ Skip (already alerted)
+    │       │
+    │       No ──▶ Continue
+    │
+    └─▶ Return
+
+Alert Entry:
+{
+    "timestamp": "2025-11-04T17:30:00.000000",
+    "total_cost": 10.15,
+    "threshold": 10.00,
+    "call_count": 42
+}

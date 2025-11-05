@@ -12,6 +12,7 @@ from lionagi_qe.core.orchestrator import QEOrchestrator
 from lionagi_qe.agents.test_generator import TestGeneratorAgent
 from lionagi_qe.agents.test_executor import TestExecutorAgent
 from lionagi_qe.agents.fleet_commander import FleetCommanderAgent
+from lionagi_qe.agents.flaky_test_hunter import FlakyTestHunterAgent
 
 
 @pytest.fixture
@@ -90,6 +91,18 @@ async def fleet_commander_agent(qe_memory, simple_model):
         model=simple_model,
         memory=qe_memory,
         skills=["agentic-quality-engineering", "holistic-testing-pact"],
+        enable_learning=False
+    )
+
+
+@pytest.fixture
+async def flaky_test_hunter_agent(qe_memory, simple_model):
+    """Create flaky test hunter agent"""
+    return FlakyTestHunterAgent(
+        agent_id="flaky-test-hunter",
+        model=simple_model,
+        memory=qe_memory,
+        skills=["agentic-quality-engineering"],
         enable_learning=False
     )
 

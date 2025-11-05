@@ -17,6 +17,9 @@ Capabilities:
 from pydantic import BaseModel, Field
 from typing import List, Dict, Optional, Literal, Any
 from datetime import datetime
+import time
+import subprocess
+from lionagi.ln import alcall, AlcallParams
 
 
 # ============================================================================
@@ -580,6 +583,221 @@ class FlakyTestHunterAgent(BaseQEAgent):
             )
 
         return result
+
+    async def detect_flaky_tests(
+        self,
+        test_files: List[str],
+        iterations: int = 10,
+        framework: str = "pytest"
+    ) -> Dict[str, Any]:
+        """
+        Run tests multiple times to detect flakiness
+
+        Uses nested alcall to:
+        1. Run each test N times in parallel
+        2. Analyze results for inconsistency patterns
+        3. Calculate flakiness scores
+        4. Identify root causes
+
+        Args:
+            test_files: List of test file paths to check
+            iterations: Number of times to run each test (default: 10)
+            framework: Test framework (pytest, jest, mocha)
+
+        Returns:
+            {
+                "total_tests": 50,
+                "flaky_tests": 8,
+                "flaky_list": [...],
+                "flakiness_rate": 16.0,
+                "execution_time": 120.5,
+                "total_runs": 500
+            }
+        """
+
+        async def run_test_multiple_times(file_path: str) -> Dict[str, Any]:
+            """Run single test N times to detect flakiness"""
+
+            async def execute_test_once(run_number: int) -> Dict[str, Any]:
+                """Execute test once"""
+                try:
+                    if framework == "pytest":
+                        result = subprocess.run(
+                            ["pytest", file_path, "-v", "-x"],
+                            capture_output=True,
+                            text=True,
+                            timeout=30
+                        )
+                    elif framework == "jest":
+                        result = subprocess.run(
+                            ["npm", "test", "--", file_path, "--no-coverage"],
+                            capture_output=True,
+                            text=True,
+                            timeout=30
+                        )
+                    elif framework == "mocha":
+                        result = subprocess.run(
+                            ["npx", "mocha", file_path],
+                            capture_output=True,
+                            text=True,
+                            timeout=30
+                        )
+                    else:
+                        raise ValueError(f"Unsupported framework: {framework}")
+
+                    return {
+                        "run": run_number,
+                        "passed": result.returncode == 0,
+                        "exit_code": result.returncode,
+                        "error": result.stderr if result.returncode != 0 else None,
+                        "duration": 0  # Could parse from output
+                    }
+                except subprocess.TimeoutExpired:
+                    return {
+                        "run": run_number,
+                        "passed": False,
+                        "error": "Timeout",
+                        "timeout": True
+                    }
+                except Exception as e:
+                    return {
+                        "run": run_number,
+                        "passed": False,
+                        "error": str(e)
+                    }
+
+            # Use nested alcall for parallel execution of multiple runs
+            # Run with minimal concurrency to avoid interfering with test results
+            run_params = AlcallParams(
+                max_concurrent=3,         # Run 3 iterations at a time
+                retry_attempts=1,         # Don't retry for flaky detection
+                retry_timeout=30.0,       # 30s timeout per run
+                throttle_period=0.2       # 200ms between runs
+            )
+
+            results = await run_params(
+                range(iterations),
+                execute_test_once
+            )
+
+            # Analyze results for flakiness
+            passed_count = sum(1 for r in results if r.get("passed"))
+            failed_count = iterations - passed_count
+
+            # Test is flaky if it sometimes passes and sometimes fails
+            is_flaky = 0 < passed_count < iterations
+
+            # Calculate flakiness score (0-1)
+            # Higher score = more flaky (closer to 50/50 pass/fail ratio)
+            flakiness_score = (min(passed_count, failed_count) / iterations) * 2
+
+            return {
+                "file": file_path,
+                "iterations": iterations,
+                "passed": passed_count,
+                "failed": failed_count,
+                "is_flaky": is_flaky,
+                "flakiness_score": flakiness_score,
+                "pass_rate": passed_count / iterations,
+                "results": results,
+                "pattern": self._identify_pattern(results)
+            }
+
+        # Execute flaky detection for all tests
+        start_time = time.time()
+
+        detection_params = AlcallParams(
+            max_concurrent=2,        # Don't overwhelm system
+            retry_attempts=1,        # No retry for detection
+            retry_timeout=300.0,     # 5 min timeout per test
+            throttle_period=0.5      # 500ms between test starts
+        )
+
+        self.logger.info(
+            f"Running flaky detection on {len(test_files)} tests "
+            f"({iterations} iterations each)"
+        )
+
+        flaky_results = await detection_params(
+            test_files,
+            run_test_multiple_times
+        )
+
+        execution_time = time.time() - start_time
+
+        # Identify flaky tests
+        flaky_tests = [r for r in flaky_results if r.get("is_flaky")]
+
+        # Store results in memory
+        await self.store_memory(
+            "aqe/flaky-tests/alcall-detection",
+            {
+                "timestamp": datetime.now().isoformat(),
+                "total_tests": len(test_files),
+                "flaky_tests": len(flaky_tests),
+                "flakiness_rate": (len(flaky_tests) / len(test_files)) * 100,
+                "flaky_list": flaky_tests,
+                "execution_time": execution_time,
+                "total_runs": len(test_files) * iterations,
+                "framework": framework
+            }
+        )
+
+        self.logger.info(
+            f"Flaky detection complete: {len(flaky_tests)}/{len(test_files)} flaky, "
+            f"{execution_time:.2f}s"
+        )
+
+        return {
+            "total_tests": len(test_files),
+            "flaky_tests": len(flaky_tests),
+            "flaky_list": flaky_tests,
+            "flakiness_rate": (len(flaky_tests) / len(test_files)) * 100 if test_files else 0,
+            "execution_time": execution_time,
+            "total_runs": len(test_files) * iterations,
+            "avg_time_per_test": execution_time / len(test_files) if test_files else 0,
+            "framework": framework
+        }
+
+    def _identify_pattern(self, results: List[Dict[str, Any]]) -> str:
+        """
+        Identify flakiness pattern from test results
+
+        Args:
+            results: List of test execution results
+
+        Returns:
+            Pattern description (e.g., "TIMING", "RANDOM", "ENVIRONMENTAL")
+        """
+        if not results:
+            return "UNKNOWN"
+
+        # Count consecutive passes and fails
+        consecutive_passes = 0
+        consecutive_fails = 0
+        max_consecutive_passes = 0
+        max_consecutive_fails = 0
+
+        for result in results:
+            if result.get("passed"):
+                consecutive_passes += 1
+                consecutive_fails = 0
+                max_consecutive_passes = max(max_consecutive_passes, consecutive_passes)
+            else:
+                consecutive_fails += 1
+                consecutive_passes = 0
+                max_consecutive_fails = max(max_consecutive_fails, consecutive_fails)
+
+        # Analyze pattern
+        total_results = len(results)
+        if max_consecutive_passes == total_results:
+            return "STABLE_PASS"
+        elif max_consecutive_fails == total_results:
+            return "STABLE_FAIL"
+        elif max_consecutive_passes > total_results * 0.7 or max_consecutive_fails > total_results * 0.7:
+            return "INTERMITTENT"  # Long runs of same result
+        else:
+            return "RANDOM"  # Frequent alternation
 
 
 # ============================================================================

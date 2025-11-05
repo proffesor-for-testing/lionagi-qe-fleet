@@ -209,8 +209,9 @@ Technical Debt Ratio:
             "aqe/quality/history", default=[]
         )
 
-        # Execute quality analysis
-        result = await self.operate(
+        # Execute quality analysis using safe_operate for robust parsing
+        # This handles malformed LLM outputs with automatic fuzzy parsing fallback
+        result = await self.safe_operate(
             instruction=f"""Perform comprehensive quality analysis with predictive analytics.
 
 Codebase: {codebase_path}

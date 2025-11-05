@@ -740,3 +740,221 @@ async def test_execute_stream(
         "type": "result",
         "data": result,
     }
+
+
+async def test_generate_stream(
+    code: str,
+    framework: TestFramework = TestFramework.PYTEST,
+    test_type: TestType = TestType.UNIT,
+    coverage_target: float = 80.0,
+    target_count: int = 10,
+) -> AsyncGenerator[Dict[str, Any], None]:
+    """Generate tests with real-time streaming progress
+
+    This tool provides incremental test generation with real-time progress updates.
+    Each test is yielded as soon as it's generated, allowing for immediate feedback
+    during long-running test generation operations.
+
+    Args:
+        code: Source code to generate tests for
+        framework: Test framework to use (pytest, jest, etc.)
+        test_type: Type of tests to generate (unit, integration, e2e)
+        coverage_target: Target code coverage percentage (0-100)
+        target_count: Number of tests to generate
+
+    Yields:
+        Progress events in the following formats:
+
+        Progress update:
+        {
+            "type": "progress",
+            "count": 5,
+            "total": 10,
+            "percent": 50.0,
+            "message": "Generated test 5 of 10..."
+        }
+
+        Individual test generated:
+        {
+            "type": "test",
+            "test_case": {
+                "test_name": "test_user_creation",
+                "test_code": "def test_user_creation(): ...",
+                "framework": "pytest",
+                "assertions": [...],
+                "edge_cases": [...]
+            }
+        }
+
+        Final completion:
+        {
+            "type": "complete",
+            "tests": [...],
+            "total": 10,
+            "coverage_estimate": 85.0,
+            "framework": "pytest"
+        }
+
+    Example Usage:
+        ```python
+        # Stream test generation
+        async for event in test_generate_stream(code, target_count=20):
+            if event["type"] == "progress":
+                print(f"Progress: {event['percent']}%")
+            elif event["type"] == "test":
+                print(f"Generated: {event['test_case']['test_name']}")
+            elif event["type"] == "complete":
+                print(f"Complete! Generated {event['total']} tests")
+        ```
+
+    Benefits:
+        - Real-time feedback during generation
+        - Immediate access to generated tests
+        - No need to wait for entire batch
+        - Better UX for long-running operations
+    """
+    from lionagi_qe.core.task import QETask
+
+    fleet = get_fleet_instance()
+
+    # Get the test generator agent
+    agent = fleet.agents.get("test-generator")
+    if not agent:
+        yield {
+            "type": "error",
+            "message": "Test generator agent not found"
+        }
+        return
+
+    # Create task
+    task = QETask(
+        task_type="test_generation_streaming",
+        context={
+            "code": code,
+            "framework": framework.value,
+            "test_type": test_type.value,
+            "coverage_target": coverage_target,
+            "target_count": target_count,
+        }
+    )
+
+    # Stream test generation
+    async for event in agent.generate_tests_streaming(task):
+        yield event
+
+
+async def coverage_analyze_stream(
+    source_path: str,
+    coverage_data: Dict[str, Any],
+    framework: str = "pytest",
+    target_coverage: float = 85.0,
+) -> AsyncGenerator[Dict[str, Any], None]:
+    """Analyze coverage with real-time streaming progress
+
+    This tool provides file-by-file coverage analysis with real-time progress updates.
+    Gaps and critical paths are yielded as they're discovered, enabling immediate
+    action on coverage issues.
+
+    Args:
+        source_path: Path to source code
+        coverage_data: Raw coverage data from test framework
+        framework: Test framework used (pytest, jest, junit, mocha)
+        target_coverage: Target coverage threshold (0-100)
+
+    Yields:
+        Progress events in the following formats:
+
+        Progress update:
+        {
+            "type": "progress",
+            "percent": 45.0,
+            "message": "Analyzing file src/utils.py...",
+            "files_analyzed": 5,
+            "total_files": 10
+        }
+
+        Gap discovered:
+        {
+            "type": "gap",
+            "gap": {
+                "file_path": "src/utils.py",
+                "line_start": 42,
+                "line_end": 58,
+                "gap_type": "uncovered",
+                "severity": "high",
+                "suggested_tests": [...]
+            }
+        }
+
+        Critical path identified:
+        {
+            "type": "critical_path",
+            "path": "src/payment/processor.py::charge_card",
+            "impact": "high"
+        }
+
+        Final result:
+        {
+            "type": "complete",
+            "overall_coverage": 78.5,
+            "line_coverage": 80.2,
+            "branch_coverage": 75.8,
+            "gaps": [...],
+            "critical_paths": [...],
+            "meets_threshold": false,
+            "analysis_time_ms": 1250
+        }
+
+    Example Usage:
+        ```python
+        # Stream coverage analysis
+        async for event in coverage_analyze_stream(
+            source_path="./src",
+            coverage_data=coverage_json,
+            framework="pytest",
+            target_coverage=85.0
+        ):
+            if event["type"] == "progress":
+                print(f"Progress: {event['percent']}%")
+            elif event["type"] == "gap":
+                gap = event["gap"]
+                print(f"Gap: {gap['file_path']} lines {gap['line_start']}-{gap['line_end']}")
+            elif event["type"] == "critical_path":
+                print(f"Critical: {event['path']}")
+            elif event["type"] == "complete":
+                print(f"Coverage: {event['overall_coverage']}%")
+        ```
+
+    Benefits:
+        - Real-time gap discovery
+        - Immediate action on critical issues
+        - Progressive analysis feedback
+        - Better UX for large codebases
+    """
+    from lionagi_qe.core.task import QETask
+
+    fleet = get_fleet_instance()
+
+    # Get the coverage analyzer agent
+    agent = fleet.agents.get("coverage-analyzer")
+    if not agent:
+        yield {
+            "type": "error",
+            "message": "Coverage analyzer agent not found"
+        }
+        return
+
+    # Create task
+    task = QETask(
+        task_type="coverage_analysis_streaming",
+        context={
+            "coverage_data": coverage_data,
+            "framework": framework,
+            "codebase_path": source_path,
+            "target_coverage": target_coverage,
+        }
+    )
+
+    # Stream coverage analysis
+    async for event in agent.analyze_coverage_streaming(task):
+        yield event

@@ -1,7 +1,10 @@
 """Test Executor Agent - Execute tests across multiple frameworks"""
 
 from typing import Dict, Any, List
+import time
+import subprocess
 from pydantic import BaseModel, Field
+from lionagi.ln import alcall, AlcallParams
 from lionagi_qe.core.base_agent import BaseQEAgent
 from lionagi_qe.core.task import QETask
 
@@ -129,3 +132,137 @@ Provide:
             )
 
         return result
+
+    async def execute_tests_parallel(
+        self,
+        test_files: List[str],
+        framework: str = "pytest"
+    ) -> Dict[str, Any]:
+        """
+        Execute tests in parallel with automatic retry and timeout
+
+        Uses LionAGI's alcall for parallel execution with:
+        - Automatic retry logic (3 attempts)
+        - Timeout handling (60s per test)
+        - Rate limiting (prevent resource exhaustion)
+        - Exponential backoff for retries
+
+        Args:
+            test_files: List of test file paths
+            framework: Test framework (pytest, jest, mocha, etc.)
+
+        Returns:
+            {
+                "total": 150,
+                "passed": 145,
+                "failed": 5,
+                "pass_rate": 96.67,
+                "results": [...],
+                "execution_time": 45.3,
+                "retries": 8,
+                "framework": "pytest"
+            }
+        """
+
+        async def run_single_test(file_path: str) -> Dict[str, Any]:
+            """Execute single test file"""
+            try:
+                if framework == "pytest":
+                    result = subprocess.run(
+                        ["pytest", file_path, "-v", "--tb=short"],
+                        capture_output=True,
+                        text=True,
+                        timeout=60
+                    )
+                elif framework == "jest":
+                    result = subprocess.run(
+                        ["npm", "test", "--", file_path],
+                        capture_output=True,
+                        text=True,
+                        timeout=60
+                    )
+                elif framework == "mocha":
+                    result = subprocess.run(
+                        ["npx", "mocha", file_path],
+                        capture_output=True,
+                        text=True,
+                        timeout=60
+                    )
+                else:
+                    raise ValueError(f"Unsupported framework: {framework}")
+
+                return {
+                    "file": file_path,
+                    "passed": result.returncode == 0,
+                    "output": result.stdout,
+                    "errors": result.stderr,
+                    "exit_code": result.returncode,
+                    "timeout": False
+                }
+            except subprocess.TimeoutExpired:
+                return {
+                    "file": file_path,
+                    "passed": False,
+                    "error": "Test execution timeout (60s)",
+                    "timeout": True
+                }
+            except Exception as e:
+                return {
+                    "file": file_path,
+                    "passed": False,
+                    "error": str(e),
+                    "timeout": False
+                }
+
+        # Configure alcall parameters for optimal parallel execution
+        params = AlcallParams(
+            max_concurrent=10,        # Run 10 tests at a time
+            retry_attempts=3,         # Retry failed tests 3 times
+            retry_timeout=60.0,       # 60s timeout per attempt
+            retry_backoff=2.0,        # Exponential backoff: 2s, 4s, 8s
+            throttle_period=0.1       # 100ms between test starts (rate limit)
+        )
+
+        start_time = time.time()
+
+        # Execute all tests with retry logic using alcall
+        self.logger.info(f"Executing {len(test_files)} tests in parallel with alcall")
+        results = await params(test_files, run_single_test)
+
+        execution_time = time.time() - start_time
+
+        # Aggregate results
+        passed = sum(1 for r in results if r.get("passed"))
+        failed = len(results) - passed
+        retries = sum(r.get("_retry_count", 0) for r in results)
+        timeouts = sum(1 for r in results if r.get("timeout"))
+
+        # Store in memory
+        await self.store_result("last_parallel_execution", {
+            "total": len(results),
+            "passed": passed,
+            "failed": failed,
+            "results": results,
+            "execution_time": execution_time,
+            "retries": retries,
+            "timeouts": timeouts,
+            "framework": framework
+        })
+
+        self.logger.info(
+            f"Parallel execution complete: {passed}/{len(results)} passed, "
+            f"{retries} retries, {execution_time:.2f}s"
+        )
+
+        return {
+            "total": len(results),
+            "passed": passed,
+            "failed": failed,
+            "pass_rate": (passed / len(results)) * 100 if results else 0,
+            "results": results,
+            "execution_time": execution_time,
+            "retries": retries,
+            "timeouts": timeouts,
+            "framework": framework,
+            "avg_time_per_test": execution_time / len(results) if results else 0
+        }

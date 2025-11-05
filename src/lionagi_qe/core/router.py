@@ -1,8 +1,11 @@
 """Multi-model routing for cost optimization"""
 
 from lionagi import iModel
-from typing import Dict, Any, Literal, Tuple
+from typing import Dict, Any, Literal, Tuple, Optional, TYPE_CHECKING
 from pydantic import BaseModel, Field
+
+if TYPE_CHECKING:
+    from .hooks import QEHooks
 
 
 class TaskComplexity(BaseModel):
@@ -30,27 +33,39 @@ class ModelRouter:
     - Critical tasks → Claude Sonnet 4.5 ($0.0065)
     """
 
-    def __init__(self, enable_routing: bool = True):
+    def __init__(
+        self,
+        enable_routing: bool = True,
+        hooks: Optional["QEHooks"] = None
+    ):
         self.enable_routing = enable_routing
+        self.hooks = hooks
 
-        # Initialize model pool
+        # Create hook registry if hooks provided
+        hook_registry = hooks.create_registry() if hooks else None
+
+        # Initialize model pool with hooks
         self.models: Dict[str, iModel] = {
             "simple": iModel(
                 provider="openai",
-                model="gpt-3.5-turbo"
+                model="gpt-3.5-turbo",
+                hook_registry=hook_registry
             ),
             "moderate": iModel(
                 provider="openai",
-                model="gpt-4o-mini"
+                model="gpt-4o-mini",
+                hook_registry=hook_registry
             ),
             "complex": iModel(
                 provider="openai",
-                model="gpt-4"
+                model="gpt-4",
+                hook_registry=hook_registry
             ),
             "critical": iModel(
                 provider="anthropic",
                 model="claude-3-5-sonnet-20241022",
-                max_tokens=2000
+                max_tokens=2000,
+                hook_registry=hook_registry
             ),
         }
 
@@ -62,10 +77,11 @@ class ModelRouter:
             "critical": 0.0065,
         }
 
-        # Complexity analyzer (lightweight model)
+        # Complexity analyzer (lightweight model) with hooks
         self._analyzer = iModel(
             provider="openai",
-            model="gpt-3.5-turbo"
+            model="gpt-3.5-turbo",
+            hook_registry=hook_registry
         )
 
         # Track routing statistics

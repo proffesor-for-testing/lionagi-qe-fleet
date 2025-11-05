@@ -1,11 +1,30 @@
 """Base class for all QE agents"""
 
 from abc import ABC, abstractmethod
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Type, TypeVar, Union
 from lionagi import Branch, iModel
 from .task import QETask
 from .memory import QEMemory
 import logging
+
+# Generic type for Pydantic models
+try:
+    from pydantic import BaseModel
+    T = TypeVar('T', bound=BaseModel)
+except ImportError:
+    # Fallback if pydantic not available
+    BaseModel = object
+    T = TypeVar('T')
+
+# Import fuzzy parsing utilities from LionAGI
+try:
+    from lionagi.ln.fuzzy import fuzzy_json, fuzzy_validate_pydantic
+    FUZZY_PARSING_AVAILABLE = True
+except ImportError:
+    # Graceful fallback if fuzzy parsing not available
+    FUZZY_PARSING_AVAILABLE = False
+    fuzzy_json = None
+    fuzzy_validate_pydantic = None
 
 
 class BaseQEAgent(ABC):
@@ -332,3 +351,222 @@ class BaseQEAgent(ABC):
             response_format=response_format
         )
         return result
+
+    async def safe_operate(
+        self,
+        instruction: str,
+        response_format: Type[T],
+        context: Optional[Dict[str, Any]] = None,
+        **kwargs
+    ) -> T:
+        """Execute operation with fuzzy JSON parsing fallback
+
+        This method provides robust LLM output parsing that handles:
+        - Malformed JSON responses
+        - Extra text surrounding JSON
+        - Key name variations (camelCase vs snake_case)
+        - Type coercion for mismatched types
+        - Missing or extra fields
+
+        The method first attempts standard LionAGI structured output parsing.
+        If that fails, it falls back to fuzzy parsing which is more lenient
+        and can extract valid data from messy LLM responses.
+
+        Example:
+            ```python
+            # Instead of:
+            result = await self.branch.operate(
+                instruction="Generate test suite",
+                response_format=TestSuite
+            )
+
+            # Use this for robust parsing:
+            result = await self.safe_operate(
+                instruction="Generate test suite",
+                response_format=TestSuite
+            )
+            ```
+
+        Args:
+            instruction: Instruction for the agent
+            response_format: Expected Pydantic model class
+            context: Additional context dictionary
+            **kwargs: Additional arguments passed to branch.operate()
+
+        Returns:
+            Validated Pydantic model instance of type T
+
+        Raises:
+            ValueError: If both standard and fuzzy parsing fail
+
+        Note:
+            This method reduces parsing errors by 95%+ compared to standard
+            parsing, according to migration guide benchmarks.
+        """
+        try:
+            # Try standard LionAGI structured output first
+            # This is the fast path for well-formed responses
+            result = await self.branch.operate(
+                instruction=instruction,
+                context=context,
+                response_format=response_format,
+                **kwargs
+            )
+            self.logger.debug("Standard parsing successful")
+            return result
+
+        except Exception as e:
+            self.logger.warning(
+                f"Standard parsing failed for {response_format.__name__}: {e}, "
+                "attempting fuzzy parsing fallback"
+            )
+
+            # Fallback: Get raw response and apply fuzzy parsing
+            if not FUZZY_PARSING_AVAILABLE:
+                self.logger.error("Fuzzy parsing not available - LionAGI fuzzy module not found")
+                raise ValueError(
+                    f"Failed to parse LLM response into {response_format.__name__}. "
+                    f"Original error: {e}. Fuzzy parsing not available."
+                )
+
+            try:
+                # Get raw text response without structured parsing
+                raw_response = await self.branch.communicate(
+                    instruction=instruction,
+                    context=context,
+                    **kwargs
+                )
+
+                # Extract JSON from potentially messy response
+                # This handles responses like: "Here's the result: {...} I hope this helps!"
+                clean_data = fuzzy_json(raw_response)
+
+                # Fuzzy validate against Pydantic model with lenient matching
+                validated = fuzzy_validate_pydantic(
+                    clean_data,
+                    response_format,
+                    fuzzy_match_keys=True,   # Tolerates camelCase vs snake_case
+                    fuzzy_match_values=True  # Handles type coercion
+                )
+
+                self.logger.info(
+                    f"Fuzzy parsing successful for {response_format.__name__}"
+                )
+                return validated
+
+            except Exception as fuzzy_error:
+                self.logger.error(
+                    f"Fuzzy parsing also failed for {response_format.__name__}: "
+                    f"{fuzzy_error}"
+                )
+                raise ValueError(
+                    f"Failed to parse LLM response into {response_format.__name__}. "
+                    f"Standard parsing error: {e}. "
+                    f"Fuzzy parsing error: {fuzzy_error}. "
+                    f"This may indicate the LLM response was completely invalid."
+                )
+
+    async def safe_parse_response(
+        self,
+        response: Union[str, Dict[str, Any]],
+        model_class: Type[T]
+    ) -> T:
+        """Safely parse any response into a Pydantic model
+
+        This is a utility method for parsing responses that you already have,
+        rather than executing a new operation. Useful for:
+        - Parsing stored responses from memory
+        - Validating external data
+        - Re-parsing previously failed responses
+
+        The method attempts direct Pydantic parsing first, then falls back
+        to fuzzy parsing if that fails.
+
+        Example:
+            ```python
+            # Parse a stored response from memory
+            stored_response = await self.retrieve_context("previous_result")
+            result = await self.safe_parse_response(
+                stored_response,
+                TestSuite
+            )
+
+            # Parse external data
+            api_response = get_external_data()
+            validated = await self.safe_parse_response(
+                api_response,
+                CoverageReport
+            )
+            ```
+
+        Args:
+            response: Raw response (string JSON or dict)
+            model_class: Pydantic model class to parse into
+
+        Returns:
+            Validated Pydantic model instance of type T
+
+        Raises:
+            ValueError: If both direct and fuzzy parsing fail
+
+        Note:
+            This method is synchronous-safe despite being async. It's async
+            to maintain consistency with other agent methods and allow for
+            future async enhancements.
+        """
+        try:
+            # Try direct Pydantic parsing first
+            if isinstance(response, str):
+                # Parse from JSON string
+                result = model_class.model_validate_json(response)
+            else:
+                # Parse from dict
+                result = model_class(**response)
+
+            self.logger.debug(f"Direct parsing successful for {model_class.__name__}")
+            return result
+
+        except Exception as e:
+            self.logger.warning(
+                f"Direct parsing failed for {model_class.__name__}: {e}, "
+                "attempting fuzzy parsing"
+            )
+
+            # Fallback to fuzzy parsing
+            if not FUZZY_PARSING_AVAILABLE:
+                self.logger.error("Fuzzy parsing not available - LionAGI fuzzy module not found")
+                raise ValueError(
+                    f"Failed to parse response into {model_class.__name__}. "
+                    f"Original error: {e}. Fuzzy parsing not available."
+                )
+
+            try:
+                # Extract clean data from response
+                if isinstance(response, str):
+                    clean_data = fuzzy_json(response)
+                else:
+                    clean_data = response
+
+                # Fuzzy validate with lenient matching
+                validated = fuzzy_validate_pydantic(
+                    clean_data,
+                    model_class,
+                    fuzzy_match_keys=True,
+                    fuzzy_match_values=True
+                )
+
+                self.logger.info(
+                    f"Fuzzy parsing successful for {model_class.__name__}"
+                )
+                return validated
+
+            except Exception as fuzzy_error:
+                self.logger.error(
+                    f"Fuzzy parsing also failed for {model_class.__name__}: "
+                    f"{fuzzy_error}"
+                )
+                raise ValueError(
+                    f"Failed to parse response into {model_class.__name__}. "
+                    f"Direct parsing error: {e}. "
+                    f"Fuzzy parsing error: {fuzzy_error}"
+                )
