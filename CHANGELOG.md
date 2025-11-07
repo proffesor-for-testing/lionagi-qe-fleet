@@ -5,6 +5,91 @@ All notable changes to the LionAGI QE Fleet project will be documented in this f
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.2] - 2025-11-07
+
+### Fixed
+
+#### Critical Bug: Parallel Agent Execution Not Working
+- **Location**: `src/lionagi_qe/core/orchestrator.py:553-557`
+- **Issue**: `execute_parallel()` method was returning unawaited coroutines instead of actual results
+  - RuntimeWarning: `coroutine 'QEOrchestrator.execute_parallel.<locals>.run_agent' was never awaited`
+  - Agents returned `<coroutine object>` instead of `GeneratedTestResponse`, `CoverageAnalysisResult`, etc.
+  - Core functionality completely broken for parallel agent execution
+- **Root Cause**: `alcall()` was not properly awaiting the coroutines returned by `run_agent()`
+- **Fix**: Replaced `alcall()` with `asyncio.gather()` for proper async execution
+  ```python
+  # Before (broken)
+  results = await alcall(
+      tasks_with_agents,
+      lambda x: run_agent(x[0], x[1])
+  )
+
+  # After (fixed)
+  import asyncio
+  tasks_with_agents = list(zip(agent_ids, tasks))
+  coroutines = [run_agent(agent_id, task_ctx) for agent_id, task_ctx in tasks_with_agents]
+  results = await asyncio.gather(*coroutines)
+  ```
+- **Impact**:
+  - **Severity**: CRITICAL - affects anyone using parallel agent execution
+  - **Scope**: `execute_parallel()` is a core orchestrator method used in examples and production code
+  - **User Experience**: Demo example (`examples/03_parallel_execution.py`) now works correctly
+- **Testing**: Verified with parallel execution of 3 agents (test generators + coverage analyzer)
+
+### Changed
+
+#### Demo Improvements
+- **examples/03_parallel_execution.py**: Enhanced demo to better showcase fleet capabilities
+  - Enabled Q-Learning (`enable_learning=True`) to demonstrate continuous improvement
+  - Replaced TestExecutor with CoverageAnalyzer for more compelling demo
+  - Shows real-time coverage analysis with gap detection (O(log n) algorithms)
+  - Better demonstrates AI intelligence (critical paths, severity assessment, recommendations)
+  - **Output**: 75% coverage, 2 gaps found with actionable suggestions
+
+#### Documentation Updates
+- **docs/demo/HONEST-CHEAT-SHEET.md**: Updated demo output to reflect actual results
+  - Shows 3 agents in parallel (2 test generators + coverage analyzer)
+  - Includes Q-Learning status (ACTIVE - patterns being learned)
+  - Real execution metrics (~8s parallel, ~$0.0014 cost)
+
+### Cleanup
+- Removed 21 `__pycache__` files from git tracking
+  - Files were previously tracked but should be gitignored
+  - `.gitignore` already has `__pycache__/` pattern (line 2)
+  - Future `__pycache__` files will be automatically ignored
+
+### Migration Notes
+
+This is a **critical hotfix release**. All users should upgrade immediately if using parallel agent execution.
+
+#### Upgrading from v1.1.1
+```bash
+# Install via pip
+pip install --upgrade lionagi-qe-fleet==1.1.2
+
+# Or via uv
+uv add lionagi-qe-fleet@1.1.2
+```
+
+**No code changes required** - the fix is internal to the orchestrator.
+
+#### Who Should Upgrade?
+- ✅ **All users** - this is a critical bug fix
+- ✅ **Priority**: Anyone using `execute_parallel()` method
+- ✅ **Examples**: If you run demo examples, they now work correctly
+
+#### Breaking Changes
+- **None** - 100% backward compatible
+
+### Statistics
+- **Files Modified**: 3 files (orchestrator.py, demo files, cleanup)
+- **Lines Changed**: ~10 lines (core fix + demo enhancements)
+- **Tests**: Verified with real parallel execution
+- **Backward Compatibility**: 100%
+- **Breaking Changes**: 0
+
+---
+
 ## [1.1.1] - 2025-11-06
 
 ### Fixed

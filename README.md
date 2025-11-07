@@ -1,6 +1,6 @@
 # LionAGI QE Fleet
 
-[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.1.2-blue.svg)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org)
 [![Security](https://img.shields.io/badge/security-95%2F100-brightgreen.svg)](SECURITY.md)
@@ -408,7 +408,7 @@ This project builds on [LionAGI](https://github.com/lion-agi/lionagi) (Apache 2.
 
 ## 📊 Project Status
 
-**Version**: 1.1.0 (In Development)
+**Version**: 1.1.2 (Production Ready)
 **Status**: Production Ready
 **Security Score**: 95/100
 **Test Coverage**: 82%
