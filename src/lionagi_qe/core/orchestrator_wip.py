@@ -60,6 +60,7 @@ class AgentLane:
     active_count: int = 0
     total_executed: int = 0
     wait_time_ms: float = 0.0
+    limit_hits: int = 0  # Times lane WIP limit was hit
     
     def __post_init__(self):
         self.memory_namespace = f"aqe/{self.lane_type.value}/*"
@@ -72,6 +73,8 @@ class AgentLane:
         wait_ms = (asyncio.get_event_loop().time() - start) * 1000
         self.active_count += 1
         self.wait_time_ms += wait_ms
+        if wait_ms > 1:  # Waited > 1ms = hit the limit
+            self.limit_hits += 1
         return wait_ms
     
     def release(self):
@@ -90,7 +93,8 @@ class AgentLane:
             "total_executed": self.total_executed,
             "wait_time_ms": self.wait_time_ms,
             "avg_wait_ms": self.wait_time_ms / max(1, self.total_executed),
-            "utilization": self.active_count / self.wip_limit if self.wip_limit > 0 else 0
+            "utilization": self.active_count / self.wip_limit if self.wip_limit > 0 else 0,
+            "limit_hits": self.limit_hits
         }
 
 
