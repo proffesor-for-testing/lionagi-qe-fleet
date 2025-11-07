@@ -551,11 +551,10 @@ class QEOrchestrator:
             return await self.execute_agent(agent_id, task)
 
         # Execute all agents in parallel
+        import asyncio
         tasks_with_agents = list(zip(agent_ids, tasks))
-        results = await alcall(
-            tasks_with_agents,
-            lambda x: run_agent(x[0], x[1])
-        )
+        coroutines = [run_agent(agent_id, task_ctx) for agent_id, task_ctx in tasks_with_agents]
+        results = await asyncio.gather(*coroutines)
 
         self.metrics["total_agents_used"] += len(agent_ids)
 
