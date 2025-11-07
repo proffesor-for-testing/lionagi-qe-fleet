@@ -8,7 +8,7 @@ import asyncio
 from lionagi import iModel
 from lionagi_qe import QEOrchestrator, ModelRouter
 from lionagi_qe.core.memory import QEMemory
-from lionagi_qe.agents import TestGeneratorAgent, TestExecutorAgent
+from lionagi_qe.agents import TestGeneratorAgent, CoverageAnalyzerAgent
 
 
 async def main():
@@ -20,7 +20,7 @@ async def main():
     orchestrator = QEOrchestrator(
         memory=memory,
         router=router,
-        enable_learning=False
+        enable_learning=True  # Enable Q-Learning for continuous improvement
     )
 
     # Create agents
@@ -37,8 +37,8 @@ async def main():
             model=model,
             memory=memory
         ),
-        TestExecutorAgent(
-            agent_id="test-executor-fast",
+        CoverageAnalyzerAgent(
+            agent_id="coverage-analyzer",
             model=model,
             memory=memory
         ),
@@ -51,7 +51,7 @@ async def main():
     agent_ids = [
         "test-generator-unit",
         "test-generator-integration",
-        "test-executor-fast"
+        "coverage-analyzer"
     ]
 
     tasks = [
@@ -69,12 +69,13 @@ async def main():
             "framework": "pytest",
             "test_type": "integration"
         },
-        # Test execution
+        # Coverage analysis
         {
-            "task_type": "execute_tests",
-            "test_path": "./tests",
+            "task_type": "analyze_coverage",
+            "coverage_data": {},  # Would contain actual coverage data
             "framework": "pytest",
-            "parallel": True
+            "codebase_path": "./src",
+            "target_coverage": 80.0
         }
     ]
 
@@ -92,8 +93,9 @@ async def main():
         print(f"   Result: {type(result).__name__}")
         if hasattr(result, 'test_name'):
             print(f"   Generated: {result.test_name}")
-        if hasattr(result, 'total_tests'):
-            print(f"   Tests Executed: {result.total_tests}")
+        if hasattr(result, 'overall_coverage'):
+            print(f"   Coverage: {result.overall_coverage:.1f}%")
+            print(f"   Gaps Found: {len(result.gaps)}")
         print()
 
     # Orchestrator status
