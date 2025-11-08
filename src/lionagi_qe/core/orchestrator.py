@@ -99,6 +99,12 @@ class QEOrchestrator:
             # Legacy mode - memory provided directly
             self.storage_config = None
 
+        # LionAGI session for workflow management (must be created before memory initialization)
+        self.session = Session()
+
+        # Logger (must be created before memory initialization)
+        self.logger = logging.getLogger("lionagi_qe.orchestrator")
+
         # Initialize memory backend
         if memory is not None:
             # Legacy: explicit memory provided
@@ -116,12 +122,6 @@ class QEOrchestrator:
 
         # Agent registry
         self.agents: Dict[str, BaseQEAgent] = {}
-
-        # LionAGI session for workflow management
-        self.session = Session()
-
-        # Logger
-        self.logger = logging.getLogger("lionagi_qe.orchestrator")
 
         # Log configuration
         if self.storage_config:
@@ -158,9 +158,10 @@ class QEOrchestrator:
         from ..config import StorageMode
 
         if self.storage_config.mode in (StorageMode.DEV, StorageMode.TEST):
-            # Use Session.context (in-memory)
-            self.logger.info("Using Session.context for in-memory storage")
-            return self.session.context
+            # Use QEMemory (in-memory) - Session.context is not available in current lionagi version
+            from .memory import QEMemory
+            self.logger.info("Using QEMemory for in-memory storage")
+            return QEMemory()
 
         elif self.storage_config.mode == StorageMode.PROD:
             # Use PostgresMemory
