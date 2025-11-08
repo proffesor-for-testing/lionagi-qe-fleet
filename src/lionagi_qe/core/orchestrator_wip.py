@@ -154,7 +154,7 @@ class ContextBudget:
             "max_tokens": self.max_tokens,
             "used_tokens": self.used_tokens,
             "remaining_tokens": self.max_tokens - self.used_tokens,
-            "utilization": self.used_tokens / self.max_tokens,
+            "utilization": (self.used_tokens / self.max_tokens) * 100,  # Return as percentage
             "calls_count": self.calls_count,
             "avg_tokens_per_call": self.used_tokens / max(1, self.calls_count),
             "budget_exceeded_count": self.budget_exceeded_count
@@ -274,6 +274,48 @@ class WIPLimitedOrchestrator(BaseOrchestrator):
         """Get agent's lane (defaults to SHARED if not assigned)"""
         return self.agent_lanes.get(agent_id, LaneType.SHARED)
     
+    async def execute_agent(self, agent_id: str, task: QETask) -> Dict[str, Any]:
+        """Execute single agent with WIP limits enforced
+        
+        Overrides base method to add WIP limit enforcement for direct calls.
+        When called directly (not via execute_parallel), still enforces limits.
+        
+        Args:
+            agent_id: Agent identifier
+            task: Task to execute
+            
+        Returns:
+            Execution result dict
+        """
+        lane_type = self.get_agent_lane(agent_id)
+        lane = self.lanes[lane_type]
+        
+        # Acquire both global and lane semaphores
+        start_time = asyncio.get_event_loop().time()
+        
+        # Global WIP limit
+        await self.global_semaphore.acquire()
+        global_wait = (asyncio.get_event_loop().time() - start_time) * 1000
+        
+        try:
+            # Lane WIP limit
+            lane_wait = await lane.acquire()
+            
+            total_wait = global_wait + lane_wait
+            
+            self.logger.debug(
+                f"Agent '{agent_id}' acquired WIP slots (lane: {lane_type.value}, "
+                f"wait: {total_wait:.1f}ms)"
+            )
+            
+            # Call base implementation
+            return await super().execute_agent(agent_id, task)
+            
+        finally:
+            # Release semaphores
+            lane.release()
+            self.global_semaphore.release()
+    
     async def execute_parallel(
         self,
         agent_ids: List[str],
@@ -334,7 +376,8 @@ class WIPLimitedOrchestrator(BaseOrchestrator):
                     f"wait: {total_wait:.1f}ms, active: {current_active}/{self.wip_limit})"
                 )
                 
-                # Execute task (delegate to base orchestrator)
+                # Execute task (delegate to base orchestrator, NOT our override)
+                # We already acquired semaphores above, so call base directly
                 agent = self.get_agent(agent_id)
                 if not agent:
                     raise ValueError(f"Agent not found: {agent_id}")
@@ -348,7 +391,7 @@ class WIPLimitedOrchestrator(BaseOrchestrator):
                         context=task_context
                     )
                 
-                return await self.execute_agent(agent_id, task)
+                return await super(WIPLimitedOrchestrator, self).execute_agent(agent_id, task)
                 
             finally:
                 # Release semaphores
@@ -431,7 +474,7 @@ class WIPLimitedOrchestrator(BaseOrchestrator):
         
         # Check context budget
         budget_metrics = self.context_budget.get_metrics()
-        if budget_metrics["utilization"] > 0.9:
+        if budget_metrics["utilization"] > 90:  # utilization is now percentage (0-100+)
             recommendations.append(
                 "⚠️ Context budget near limit (>90%). "
                 "Implement delta updates or increase budget."
