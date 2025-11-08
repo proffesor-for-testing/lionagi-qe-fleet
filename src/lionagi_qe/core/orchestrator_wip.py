@@ -400,11 +400,17 @@ class WIPLimitedOrchestrator(BaseOrchestrator):
         """Generate recommendations based on coordination metrics"""
         recommendations = []
         
+        # Calculate global average wait time first (needed for lane recommendations)
+        avg_wait = self.coordination_metrics["total_wait_time_ms"] / max(
+            1, self.coordination_metrics["parallel_executions"]
+        )
+        high_contention = avg_wait > 100  # >100ms average wait indicates contention
+        
         # Check WIP limit effectiveness
         if self.coordination_metrics["wip_limit_hits"] > 10:
             recommendations.append(
                 f"⚠️ Global WIP limit hit {self.coordination_metrics['wip_limit_hits']} times. "
-                "Consider increasing global limit or reviewing workflow parallelism."
+                "consider increasing global limit or reviewing workflow parallelism."
             )
         
         # Check lane utilization
@@ -413,12 +419,14 @@ class WIPLimitedOrchestrator(BaseOrchestrator):
             if metrics["utilization"] > 0.8:
                 recommendations.append(
                     f"⚠️ Lane '{lane_type.value}' at {metrics['utilization']:.0%} utilization. "
-                    f"Consider increasing WIP limit from {lane.wip_limit} to {lane.wip_limit + 2}."
+                    f"consider increasing WIP limit from {lane.wip_limit} to {lane.wip_limit + 2}."
                 )
-            elif metrics["total_executed"] > 0 and metrics["utilization"] < 0.2:
+            elif (metrics["total_executed"] > 0 and metrics["utilization"] < 0.2 and 
+                  metrics["limit_hits"] == 0 and metrics["avg_wait_ms"] < 10 and not high_contention):
+                # Only recommend reducing if there's no contention (no limit hits, low wait time, no global contention)
                 recommendations.append(
                     f"💡 Lane '{lane_type.value}' underutilized ({metrics['utilization']:.0%}). "
-                    f"Consider reducing WIP limit from {lane.wip_limit} to {max(1, lane.wip_limit - 1)}."
+                    f"consider reducing WIP limit from {lane.wip_limit} to {max(1, lane.wip_limit - 1)}."
                 )
         
         # Check context budget
@@ -429,14 +437,11 @@ class WIPLimitedOrchestrator(BaseOrchestrator):
                 "Implement delta updates or increase budget."
             )
         
-        # Check average wait time
-        avg_wait = self.coordination_metrics["total_wait_time_ms"] / max(
-            1, self.coordination_metrics["parallel_executions"]
-        )
-        if avg_wait > 100:  # >100ms average wait
+        # Check average wait time (already calculated above)
+        if high_contention:
             recommendations.append(
                 f"⚠️ High average wait time ({avg_wait:.0f}ms). "
-                "WIP limits may be too restrictive for current workload."
+                "consider increasing WIP limits for current workload."
             )
         
         if not recommendations:
