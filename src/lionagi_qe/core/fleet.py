@@ -409,7 +409,7 @@ class QEFleet:
 
         return await self.orchestrator.get_fleet_status()
 
-    async def get_agent(self, agent_id: str) -> Optional[BaseQEAgent]:
+    def get_agent(self, agent_id: str) -> Optional[BaseQEAgent]:
         """Get registered agent by ID
 
         Args:

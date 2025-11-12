@@ -6,6 +6,7 @@ import warnings
 from typing import Dict, Any
 from lionagi import iModel
 from lionagi_qe.core.memory import QEMemory
+from lionagi_qe.core.fleet import QEFleet
 from lionagi_qe.core.router import ModelRouter
 from lionagi_qe.core.task import QETask
 from lionagi_qe.core.orchestrator import QEOrchestrator
@@ -72,24 +73,18 @@ async def qe_orchestrator(qe_memory, model_router):
 
 
 @pytest.fixture
-async def qe_fleet(qe_memory, model_router):
-    """Create QE fleet instance (DEPRECATED - use qe_orchestrator instead)
-
-    This fixture is kept for backward compatibility with existing tests.
-    New tests should use qe_orchestrator fixture directly.
+async def qe_fleet():
+    """Create QE fleet instance
+    
+    Returns actual QEFleet wrapper (not just orchestrator).
+    Tests expect fleet.orchestrator to exist.
     """
-    warnings.warn(
-        "qe_fleet fixture is deprecated. Use qe_orchestrator fixture instead.",
-        DeprecationWarning,
-        stacklevel=2
-    )
-
-    # Return orchestrator directly instead of QEFleet wrapper
-    return QEOrchestrator(
-        memory=qe_memory,
-        router=model_router,
+    fleet = QEFleet(
+        enable_routing=False,
         enable_learning=False
     )
+    await fleet.initialize()
+    return fleet
 
 
 @pytest.fixture

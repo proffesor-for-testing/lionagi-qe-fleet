@@ -80,7 +80,7 @@ class TestQEFleet:
 
         qe_fleet.register_agent(agent)
 
-        registered = await qe_fleet.get_agent("test-agent")
+        registered = qe_fleet.get_agent("test-agent")
         assert registered == agent
 
     @pytest.mark.asyncio
@@ -247,14 +247,14 @@ class TestQEFleet:
         agent = MockAgent("lookup-agent", model, qe_fleet.memory)
         qe_fleet.register_agent(agent)
 
-        retrieved = await qe_fleet.get_agent("lookup-agent")
+        retrieved = qe_fleet.get_agent("lookup-agent")
 
         assert retrieved == agent
 
     @pytest.mark.asyncio
     async def test_get_nonexistent_agent(self, qe_fleet):
         """Test getting non-existent agent returns None"""
-        agent = await qe_fleet.get_agent("nonexistent")
+        agent = qe_fleet.get_agent("nonexistent")
 
         assert agent is None
 
@@ -322,7 +322,7 @@ class TestQEFleet:
 
         # Verify all registered
         for i in range(5):
-            retrieved = await qe_fleet.get_agent(f"multi-agent-{i}")
+            retrieved = qe_fleet.get_agent(f"multi-agent-{i}")
             assert retrieved is not None
 
     @pytest.mark.asyncio
