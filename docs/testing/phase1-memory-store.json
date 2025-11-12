@@ -1,0 +1,379 @@
+{
+  "metadata": {
+    "generated_date": "2025-11-12",
+    "version": "1.0.0",
+    "phase": "phase1",
+    "document_title": "Phase 1 Test Specifications",
+    "memory_key": "aqe/test-plan/phase1-test-specs"
+  },
+  "coverage_goals": {
+    "minimum_coverage": 85.0,
+    "critical_paths_coverage": 100.0,
+    "mutation_score_target": 80.0,
+    "per_component": {
+      "mcp_server": {
+        "target": 95.0,
+        "critical_initialization": 100.0
+      },
+      "mcp_tools": {
+        "target": 90.0,
+        "core_tools": 100.0
+      },
+      "base_agent": {
+        "target": 95.0,
+        "memory_operations": 100.0
+      },
+      "redis_memory": {
+        "target": 85.0,
+        "store_retrieve": 100.0
+      },
+      "postgres_memory": {
+        "target": 85.0,
+        "store_retrieve": 100.0
+      },
+      "test_generator_agent": {
+        "target": 90.0,
+        "test_generation": 100.0
+      },
+      "test_executor_agent": {
+        "target": 90.0,
+        "test_execution": 100.0
+      },
+      "coverage_analyzer": {
+        "target": 90.0,
+        "gap_detection": 100.0
+      },
+      "fleet_commander": {
+        "target": 85.0,
+        "orchestration": 100.0
+      },
+      "authentication": {
+        "target": 100.0,
+        "all_auth_paths": 100.0
+      },
+      "api_endpoints": {
+        "target": 100.0,
+        "all_endpoints": 100.0
+      }
+    }
+  },
+  "test_frameworks": {
+    "core": {
+      "pytest": ">=8.0.0",
+      "pytest_asyncio": ">=1.1.0",
+      "pytest_cov": ">=6.0.0",
+      "pytest_mock": ">=3.12.0",
+      "hypothesis": ">=6.100.0",
+      "coverage": ">=7.0.0"
+    },
+    "api_testing": {
+      "fastapi_testclient": "Built-in",
+      "httpx": "Latest"
+    },
+    "load_testing": {
+      "locust": ">=2.20.0",
+      "k6": "Latest"
+    },
+    "contract_testing": {
+      "pact_python": ">=2.0.0"
+    }
+  },
+  "unit_tests": {
+    "mcp_server": {
+      "file": "tests/unit/mcp/test_mcp_server_unit.py",
+      "target_module": "src/lionagi_qe/mcp/mcp_server.py",
+      "test_categories": [
+        "Initialization & Configuration",
+        "Fleet Initialization",
+        "Tool Registration",
+        "Server Lifecycle",
+        "Factory & Entrypoint"
+      ],
+      "test_count_estimate": 25,
+      "coverage_target": 95.0,
+      "priority": "P0"
+    },
+    "mcp_tools": {
+      "file": "tests/unit/mcp/test_mcp_tools_unit.py",
+      "target_module": "src/lionagi_qe/mcp/mcp_tools.py",
+      "test_categories": [
+        "Fleet Instance Management",
+        "Core Testing Tools",
+        "Performance & Security Tools",
+        "Fleet Orchestration Tools",
+        "Advanced Tools",
+        "Streaming Tools"
+      ],
+      "test_count_estimate": 40,
+      "coverage_target": 90.0,
+      "priority": "P0"
+    },
+    "redis_memory": {
+      "file": "tests/unit/persistence/test_redis_memory_unit.py",
+      "target_module": "src/lionagi_qe/persistence/redis_memory.py",
+      "test_categories": [
+        "Initialization",
+        "Store Operations",
+        "Retrieve Operations",
+        "Search Operations",
+        "Partition Management",
+        "Statistics"
+      ],
+      "test_count_estimate": 20,
+      "coverage_target": 85.0,
+      "priority": "P1"
+    },
+    "postgres_memory": {
+      "file": "tests/unit/persistence/test_postgres_memory_unit.py",
+      "target_module": "src/lionagi_qe/persistence/postgres_memory.py",
+      "test_categories": [
+        "Initialization",
+        "Store Operations",
+        "Retrieve Operations",
+        "Search Operations",
+        "Transaction Management",
+        "Statistics"
+      ],
+      "test_count_estimate": 25,
+      "coverage_target": 85.0,
+      "priority": "P1"
+    },
+    "base_agent": {
+      "file": "tests/unit/agents/test_base_agent_unit.py",
+      "target_module": "src/lionagi_qe/core/base_agent.py",
+      "test_categories": [
+        "Initialization",
+        "Memory Backend Type Detection",
+        "Memory Operations",
+        "Q-Learning Integration",
+        "Fuzzy Parsing"
+      ],
+      "test_count_estimate": 30,
+      "coverage_target": 95.0,
+      "priority": "P0"
+    }
+  },
+  "integration_tests": {
+    "mcp_server_integration": {
+      "file": "tests/integration/test_mcp_server_integration.py",
+      "test_scenarios": [
+        "Server full lifecycle",
+        "Tool execution end-to-end",
+        "Fleet coordination via MCP"
+      ],
+      "test_count_estimate": 10,
+      "requires": ["QEFleet", "Real agents"],
+      "priority": "P1"
+    },
+    "api_storage_integration": {
+      "file": "tests/integration/test_api_storage_integration.py",
+      "test_scenarios": [
+        "Test generation stores in Redis",
+        "Coverage analysis stores in PostgreSQL",
+        "Cross-agent memory sharing"
+      ],
+      "test_count_estimate": 8,
+      "requires": ["Redis", "PostgreSQL"],
+      "priority": "P1"
+    },
+    "queue_integration": {
+      "file": "tests/integration/test_queue_integration.py",
+      "test_scenarios": [
+        "Async test generation via Celery",
+        "Queue multiple tasks",
+        "Task retry on failure"
+      ],
+      "test_count_estimate": 6,
+      "requires": ["Celery", "Redis broker"],
+      "priority": "P2"
+    },
+    "websocket_streaming": {
+      "file": "tests/integration/test_websocket_streaming.py",
+      "test_scenarios": [
+        "Test execution stream via WebSocket",
+        "Coverage analysis stream via WebSocket"
+      ],
+      "test_count_estimate": 4,
+      "requires": ["WebSocket server"],
+      "priority": "P2"
+    }
+  },
+  "api_tests": {
+    "endpoints": {
+      "file": "tests/api/test_endpoints.py",
+      "endpoints": [
+        "POST /tools/test_generate",
+        "POST /tools/test_execute",
+        "POST /tools/coverage_analyze",
+        "POST /tools/quality_gate",
+        "POST /tools/performance_test",
+        "POST /tools/security_scan",
+        "POST /tools/fleet_orchestrate",
+        "GET /tools/get_fleet_status"
+      ],
+      "test_count_estimate": 32,
+      "coverage_target": 100.0,
+      "priority": "P0"
+    },
+    "contracts": {
+      "file": "tests/api/test_contracts.py",
+      "framework": "pact-python",
+      "contracts": [
+        "test_generate contract",
+        "test_execute contract",
+        "coverage_analyze contract",
+        "quality_gate contract"
+      ],
+      "test_count_estimate": 10,
+      "priority": "P2"
+    }
+  },
+  "performance_tests": {
+    "locust": {
+      "file": "tests/performance/test_load_locust.py",
+      "scenarios": [
+        "Test generation load",
+        "Coverage analysis load",
+        "Fleet orchestration load"
+      ],
+      "virtual_users": [10, 50, 100],
+      "duration_seconds": 60,
+      "priority": "P2"
+    },
+    "k6": {
+      "file": "tests/performance/test_load_k6.js",
+      "scenarios": [
+        "Test generation throughput",
+        "API endpoint latency"
+      ],
+      "virtual_users": [10, 50, 100],
+      "duration_seconds": 60,
+      "priority": "P2"
+    }
+  },
+  "test_file_structure": {
+    "root": "tests/",
+    "directories": [
+      "unit/mcp/",
+      "unit/persistence/",
+      "unit/agents/",
+      "unit/core/",
+      "integration/",
+      "api/",
+      "performance/",
+      "mutation/"
+    ],
+    "total_test_files_estimate": 25,
+    "total_test_cases_estimate": 250
+  },
+  "implementation_schedule": {
+    "week1_foundation": {
+      "tasks": [
+        "MCP server initialization tests",
+        "MCP tools unit tests (core tools)",
+        "Redis memory unit tests",
+        "Base agent unit tests"
+      ],
+      "test_count": 75,
+      "priority": "P0"
+    },
+    "week2_core": {
+      "tasks": [
+        "Test generation tool tests",
+        "Test execution tool tests",
+        "Coverage analysis tool tests",
+        "API → Storage integration tests"
+      ],
+      "test_count": 60,
+      "priority": "P0-P1"
+    },
+    "week3_advanced": {
+      "tasks": [
+        "Streaming tools tests",
+        "WebSocket integration tests",
+        "Celery queue integration tests",
+        "API endpoint tests"
+      ],
+      "test_count": 50,
+      "priority": "P1-P2"
+    },
+    "week4_load_contract": {
+      "tasks": [
+        "Load tests (locust)",
+        "Load tests (k6)",
+        "Contract tests (pact-python)",
+        "Mutation testing"
+      ],
+      "test_count": 25,
+      "priority": "P2"
+    }
+  },
+  "priority_test_cases": {
+    "P0_critical": [
+      "MCP server initialization",
+      "Fleet initialization with agents",
+      "Tool registration (17 tools)",
+      "Core tool execution (test_generate, test_execute)",
+      "Memory store/retrieve operations",
+      "API authentication",
+      "Agent task execution"
+    ],
+    "P1_high": [
+      "Tool error handling",
+      "Fleet lifecycle (start/stop)",
+      "Storage backend integration",
+      "API endpoint validation",
+      "Agent memory coordination",
+      "Q-learning integration",
+      "Fuzzy parsing fallback"
+    ],
+    "P2_medium": [
+      "Streaming tools",
+      "WebSocket integration",
+      "Celery queue integration",
+      "Advanced tools (flaky test hunt, chaos, etc.)",
+      "Contract testing",
+      "Load testing"
+    ]
+  },
+  "memory_keys": {
+    "root": "aqe/test-plan/phase1-test-specs",
+    "unit_tests": "aqe/test-plan/phase1-test-specs/unit-tests",
+    "integration_tests": "aqe/test-plan/phase1-test-specs/integration-tests",
+    "api_tests": "aqe/test-plan/phase1-test-specs/api-tests",
+    "coverage_goals": "aqe/test-plan/phase1-test-specs/coverage-goals",
+    "frameworks": "aqe/test-plan/phase1-test-specs/frameworks",
+    "implementation_schedule": "aqe/test-plan/phase1-test-specs/implementation-schedule"
+  },
+  "test_metrics": {
+    "unit_tests": {
+      "count_estimate": 150,
+      "execution_time_seconds": 30,
+      "isolation": "100%"
+    },
+    "integration_tests": {
+      "count_estimate": 30,
+      "execution_time_seconds": 180,
+      "backends_required": ["PostgreSQL", "Redis", "Celery"]
+    },
+    "api_tests": {
+      "count_estimate": 40,
+      "execution_time_seconds": 60,
+      "coverage": "100%"
+    },
+    "load_tests": {
+      "scenarios": 5,
+      "virtual_users": "10-100",
+      "duration_seconds": 60,
+      "thresholds": {
+        "response_time_p95_ms": 500,
+        "error_rate_percent": 1.0
+      }
+    }
+  },
+  "documentation": {
+    "full_specifications": "docs/testing/phase1-test-specifications.md",
+    "quick_reference": "docs/testing/phase1-quick-reference.md",
+    "memory_store": "docs/testing/phase1-memory-store.json"
+  }
+}

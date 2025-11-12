@@ -1,0 +1,40 @@
+# Basic GitHub Actions workflow for QE Fleet
+# Generates tests and runs quality checks on every push
+
+name: QE Fleet - Basic
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  qe-basic:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install QE Fleet
+        run: pip install lionagi-qe-fleet==1.2.1
+
+      - name: Generate Tests
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          aqe generate src/ --ci-mode --json --output tests/generated/
+
+      - name: Run Tests
+        run: |
+          aqe execute tests/ --parallel --coverage --ci-mode
+
+      - name: Quality Gate
+        run: |
+          aqe quality-gate --coverage-threshold 80 --fail-on-error

@@ -1,0 +1,164 @@
+{
+  "version": "1.0.0",
+  "title": "Storage Backend Failure - S3 and Local Filesystem",
+  "description": "Test resilience when storage backends become unavailable",
+  "tags": ["storage", "s3", "filesystem", "failure", "phase1"],
+  "configuration": {
+    "s3_bucket": {
+      "type": "env",
+      "key": "S3_BUCKET_NAME"
+    },
+    "local_storage_path": {
+      "type": "env",
+      "key": "LOCAL_STORAGE_PATH",
+      "default": "/tmp/lionagi_storage"
+    },
+    "storage_backend": {
+      "type": "env",
+      "key": "STORAGE_BACKEND",
+      "default": "s3"
+    }
+  },
+  "steady-state-hypothesis": {
+    "title": "System handles storage failures with fallback mechanisms",
+    "probes": [
+      {
+        "type": "probe",
+        "name": "storage-write-capability",
+        "tolerance": true,
+        "provider": {
+          "type": "python",
+          "module": "tests.chaos.probes.storage",
+          "func": "test_storage_write",
+          "arguments": {
+            "test_data": "chaos_experiment_marker",
+            "backend": "${storage_backend}"
+          }
+        }
+      },
+      {
+        "type": "probe",
+        "name": "storage-read-capability",
+        "tolerance": true,
+        "provider": {
+          "type": "python",
+          "module": "tests.chaos.probes.storage",
+          "func": "test_storage_read",
+          "arguments": {
+            "backend": "${storage_backend}"
+          }
+        }
+      }
+    ]
+  },
+  "method": [
+    {
+      "type": "action",
+      "name": "s3-network-partition",
+      "provider": {
+        "type": "python",
+        "module": "tests.chaos.actions.network",
+        "func": "block_s3_endpoints",
+        "arguments": {
+          "duration": "300s",
+          "regions": ["us-east-1", "us-west-2"]
+        }
+      },
+      "pauses": {
+        "after": 10
+      }
+    },
+    {
+      "type": "probe",
+      "name": "verify-fallback-to-local",
+      "provider": {
+        "type": "python",
+        "module": "tests.chaos.probes.storage",
+        "func": "verify_storage_fallback",
+        "arguments": {
+          "expected_backend": "local",
+          "fallback_path": "${local_storage_path}"
+        }
+      }
+    },
+    {
+      "type": "action",
+      "name": "filesystem-permission-denial",
+      "provider": {
+        "type": "process",
+        "path": "chmod",
+        "arguments": [
+          "000",
+          "${local_storage_path}"
+        ]
+      },
+      "pauses": {
+        "after": 5
+      }
+    },
+    {
+      "type": "probe",
+      "name": "verify-error-handling",
+      "provider": {
+        "type": "python",
+        "module": "tests.chaos.probes.storage",
+        "func": "verify_storage_error_handling",
+        "arguments": {
+          "expected_behavior": "graceful_degradation",
+          "log_errors": true
+        }
+      }
+    },
+    {
+      "type": "probe",
+      "name": "check-data-consistency",
+      "tolerance": true,
+      "provider": {
+        "type": "python",
+        "module": "tests.chaos.probes.storage",
+        "func": "verify_no_data_loss",
+        "arguments": {
+          "check_integrity": true,
+          "verify_checksums": true
+        }
+      }
+    }
+  ],
+  "rollbacks": [
+    {
+      "type": "action",
+      "name": "restore-filesystem-permissions",
+      "provider": {
+        "type": "process",
+        "path": "chmod",
+        "arguments": [
+          "755",
+          "${local_storage_path}"
+        ]
+      }
+    },
+    {
+      "type": "action",
+      "name": "restore-s3-connectivity",
+      "provider": {
+        "type": "python",
+        "module": "tests.chaos.actions.network",
+        "func": "restore_s3_endpoints"
+      }
+    },
+    {
+      "type": "action",
+      "name": "verify-storage-recovery",
+      "provider": {
+        "type": "python",
+        "module": "tests.chaos.actions.storage",
+        "func": "verify_all_backends_healthy",
+        "arguments": {
+          "timeout": 60,
+          "test_write": true,
+          "test_read": true
+        }
+      }
+    }
+  ]
+}

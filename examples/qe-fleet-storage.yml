@@ -1,0 +1,93 @@
+# QE Fleet Artifact Storage Configuration
+# Complete example configuration for all storage backends
+
+storage:
+  # Backend type: local, s3, minio, github-actions, gitlab-ci
+  backend: local
+
+  # Local filesystem storage (default)
+  local:
+    path: .artifacts/
+    create_if_missing: true
+
+  # AWS S3 storage (uncomment to use)
+  # s3:
+  #   bucket: qe-fleet-artifacts
+  #   region: us-east-1
+  #   # Optional: Custom endpoint for MinIO
+  #   # endpoint_url: http://localhost:9000
+  #   # Optional: Credentials (or use IAM role)
+  #   # access_key: ${AWS_ACCESS_KEY}
+  #   # secret_key: ${AWS_SECRET_KEY}
+  #   prefix: qe-fleet/
+  #   use_ssl: true
+  #   verify_ssl: true
+
+  # CI-native storage (GitHub Actions or GitLab CI)
+  # ci:
+  #   platform: github-actions  # or gitlab-ci
+  #   artifact_name_prefix: qe-fleet-
+  #   retention_days: 30
+
+# Retention policy
+retention:
+  # Default time-to-live in days
+  default_ttl_days: 30
+
+  # Always keep N most recent artifacts (even if expired)
+  keep_latest_n: 10
+
+  # Cleanup schedule (cron format)
+  cleanup_schedule_cron: "0 2 * * *"  # 2 AM daily
+
+  # Enable automatic cleanup
+  enabled: true
+
+# Compression settings
+compression_enabled: true
+compression_level: 6  # 1-9 (higher = better compression, slower)
+
+# Maximum artifact size in MB
+max_artifact_size_mb: 100
+
+# Examples of different configurations:
+
+# Example 1: Local storage with aggressive retention
+# storage:
+#   backend: local
+#   local:
+#     path: /var/qe-artifacts
+# retention:
+#   default_ttl_days: 7
+#   keep_latest_n: 5
+
+# Example 2: S3 with long retention
+# storage:
+#   backend: s3
+#   s3:
+#     bucket: my-qe-artifacts
+#     region: us-west-2
+#     access_key: ${AWS_ACCESS_KEY}
+#     secret_key: ${AWS_SECRET_KEY}
+# retention:
+#   default_ttl_days: 90
+#   keep_latest_n: 50
+
+# Example 3: MinIO (self-hosted S3)
+# storage:
+#   backend: minio
+#   s3:
+#     bucket: qe-artifacts
+#     endpoint_url: http://minio:9000
+#     access_key: minioadmin
+#     secret_key: minioadmin
+#     use_ssl: false
+#     verify_ssl: false
+
+# Example 4: GitHub Actions
+# storage:
+#   backend: github-actions
+#   ci:
+#     platform: github-actions
+#     artifact_name_prefix: qe-
+#     retention_days: 90

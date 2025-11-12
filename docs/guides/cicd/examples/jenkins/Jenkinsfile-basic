@@ -1,0 +1,70 @@
+// Basic Jenkinsfile for QE Fleet integration
+
+pipeline {
+    agent any
+
+    environment {
+        ANTHROPIC_API_KEY = credentials('anthropic-api-key')
+        QE_FLEET_VERSION = '1.2.1'
+        PYTHON_VERSION = '3.11'
+    }
+
+    stages {
+        stage('Setup') {
+            steps {
+                sh """
+                    python${PYTHON_VERSION} -m pip install lionagi-qe-fleet==${QE_FLEET_VERSION}
+                """
+            }
+        }
+
+        stage('Generate Tests') {
+            steps {
+                sh """
+                    aqe generate src/ --ci-mode --json --output tests/generated/
+                """
+            }
+        }
+
+        stage('Run Tests') {
+            steps {
+                sh """
+                    aqe execute tests/ --parallel --coverage --ci-mode
+                """
+            }
+        }
+
+        stage('Quality Gate') {
+            steps {
+                sh """
+                    aqe quality-gate --coverage-threshold 80 --fail-on-error
+                """
+            }
+        }
+    }
+
+    post {
+        always {
+            archiveArtifacts artifacts: '''
+                coverage.xml,
+                tests/generated/**,
+                htmlcov/**
+            ''', allowEmptyArchive: true
+
+            publishHTML([
+                reportDir: 'htmlcov',
+                reportFiles: 'index.html',
+                reportName: 'Coverage Report',
+                keepAll: true
+            ])
+        }
+
+        success {
+            echo 'QE Fleet pipeline completed successfully!'
+        }
+
+        failure {
+            echo 'QE Fleet pipeline failed!'
+        }
+    }
+}

@@ -1,0 +1,229 @@
+# Advanced GitHub Actions workflow for QE Fleet
+# Includes parallel jobs, caching, artifacts, badges, and PR comments
+
+name: QE Fleet - Advanced
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  PYTHON_VERSION: '3.11'
+  QE_FLEET_VERSION: '1.2.1'
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      cache-key: ${{ steps.cache-key.outputs.key }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: cache-key
+        run: echo "key=${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}" >> $GITHUB_OUTPUT
+
+  test-generation:
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Cache QE Fleet
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/qe-fleet
+          key: ${{ needs.setup.outputs.cache-key }}
+
+      - name: Install Dependencies
+        run: |
+          pip install lionagi-qe-fleet==${{ env.QE_FLEET_VERSION }}
+
+      - name: Generate Tests
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          QE_ROUTING_ENABLED: 'true'  # Enable cost optimization
+        run: |
+          aqe generate src/ \
+            --ci-mode \
+            --json \
+            --parallel \
+            --output tests/generated/ \
+            --store-artifacts \
+            --artifact-key "build-${{ github.sha }}" \
+            | tee generation-results.json
+
+      - name: Upload Generated Tests
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-tests
+          path: tests/generated/
+          retention-days: 30
+
+      - name: Upload Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: generation-results
+          path: generation-results.json
+
+  test-execution:
+    needs: test-generation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Download Generated Tests
+        uses: actions/download-artifact@v4
+        with:
+          name: generated-tests
+          path: tests/generated/
+
+      - name: Install Dependencies
+        run: |
+          pip install lionagi-qe-fleet==${{ env.QE_FLEET_VERSION }}
+
+      - name: Run Tests with Coverage
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          aqe execute tests/ \
+            --parallel \
+            --coverage \
+            --format json \
+            --ci-mode \
+            --store-artifacts \
+            | tee execution-results.json
+
+      - name: Upload Coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: |
+            coverage.xml
+            htmlcov/
+          retention-days: 90
+
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install QE Fleet
+        run: pip install lionagi-qe-fleet==${{ env.QE_FLEET_VERSION }}
+
+      - name: Security Scan
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          aqe security-scan src/ \
+            --scan-type comprehensive \
+            --severity medium \
+            --format json \
+            --ci-mode \
+            | tee security-results.json
+
+      - name: Upload Security Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-report
+          path: security-results.json
+          retention-days: 365
+
+  quality-gate:
+    needs: [test-execution, security-scan]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install QE Fleet
+        run: pip install lionagi-qe-fleet==${{ env.QE_FLEET_VERSION }}
+
+      - name: Download Results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: '*-results'
+
+      - name: Quality Gate
+        run: |
+          aqe quality-gate \
+            --coverage-threshold 80 \
+            --quality-threshold 85 \
+            --security-threshold 90 \
+            --fail-on-error
+
+  update-badges:
+    if: github.ref == 'refs/heads/main'
+    needs: quality-gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update Badges
+        env:
+          QE_API_KEY: ${{ secrets.QE_API_KEY }}
+        run: |
+          curl -X POST https://api.example.com/api/v1/badge/refresh \
+            -H "Authorization: Bearer $QE_API_KEY" \
+            -d '{"project": "${{ github.repository }}"}'
+
+  pr-comment:
+    if: github.event_name == 'pull_request'
+    needs: [test-generation, test-execution, quality-gate]
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Download Results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: '*-results'
+
+      - name: Create PR Comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const genResults = JSON.parse(fs.readFileSync('generation-results/generation-results.json'));
+            const execResults = JSON.parse(fs.readFileSync('execution-results/execution-results.json'));
+
+            const body = `## 🤖 QE Fleet Results
+
+            ### Test Generation
+            - Tests Generated: ${genResults.data.tests_generated}
+            - Files Processed: ${genResults.data.files_processed}
+            - Coverage Estimate: ${genResults.data.coverage_estimate}%
+
+            ### Test Execution
+            - Tests Run: ${execResults.data.tests_run}
+            - Passed: ${execResults.data.passed} ✅
+            - Failed: ${execResults.data.failed} ❌
+            - Coverage: ${execResults.data.coverage.line_rate}%
+
+            [View Full Report](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            `;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.name,
+              body: body
+            });

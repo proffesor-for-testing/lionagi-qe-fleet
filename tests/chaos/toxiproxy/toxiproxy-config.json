@@ -1,0 +1,182 @@
+{
+  "name": "LionAGI QE Fleet - Toxiproxy Configuration",
+  "proxies": [
+    {
+      "name": "redis",
+      "listen": "127.0.0.1:26379",
+      "upstream": "localhost:6379",
+      "enabled": true,
+      "toxics": []
+    },
+    {
+      "name": "postgres",
+      "listen": "127.0.0.1:25432",
+      "upstream": "localhost:5432",
+      "enabled": true,
+      "toxics": []
+    },
+    {
+      "name": "s3",
+      "listen": "127.0.0.1:29000",
+      "upstream": "s3.amazonaws.com:443",
+      "enabled": true,
+      "toxics": []
+    }
+  ],
+  "scenarios": [
+    {
+      "name": "redis-latency-injection",
+      "description": "Inject 500ms latency to Redis connections",
+      "proxy": "redis",
+      "toxic": {
+        "type": "latency",
+        "name": "redis_latency",
+        "stream": "downstream",
+        "toxicity": 1.0,
+        "attributes": {
+          "latency": 500,
+          "jitter": 100
+        }
+      }
+    },
+    {
+      "name": "redis-bandwidth-limit",
+      "description": "Limit Redis bandwidth to 100KB/s",
+      "proxy": "redis",
+      "toxic": {
+        "type": "bandwidth",
+        "name": "redis_bandwidth",
+        "stream": "downstream",
+        "toxicity": 1.0,
+        "attributes": {
+          "rate": 100
+        }
+      }
+    },
+    {
+      "name": "redis-connection-timeout",
+      "description": "Simulate connection timeouts to Redis",
+      "proxy": "redis",
+      "toxic": {
+        "type": "timeout",
+        "name": "redis_timeout",
+        "stream": "downstream",
+        "toxicity": 0.3,
+        "attributes": {
+          "timeout": 5000
+        }
+      }
+    },
+    {
+      "name": "postgres-slow-queries",
+      "description": "Add 2-second latency to PostgreSQL queries",
+      "proxy": "postgres",
+      "toxic": {
+        "type": "latency",
+        "name": "pg_slow_queries",
+        "stream": "downstream",
+        "toxicity": 1.0,
+        "attributes": {
+          "latency": 2000,
+          "jitter": 500
+        }
+      }
+    },
+    {
+      "name": "postgres-packet-loss",
+      "description": "Introduce 10% packet loss to PostgreSQL",
+      "proxy": "postgres",
+      "toxic": {
+        "type": "slicer",
+        "name": "pg_packet_loss",
+        "stream": "downstream",
+        "toxicity": 0.1,
+        "attributes": {
+          "average_size": 1400,
+          "size_variation": 200,
+          "delay": 100
+        }
+      }
+    },
+    {
+      "name": "postgres-connection-limit",
+      "description": "Limit concurrent PostgreSQL connections",
+      "proxy": "postgres",
+      "toxic": {
+        "type": "limit_data",
+        "name": "pg_conn_limit",
+        "stream": "downstream",
+        "toxicity": 1.0,
+        "attributes": {
+          "bytes": 1048576
+        }
+      }
+    },
+    {
+      "name": "s3-high-latency",
+      "description": "Simulate slow S3 responses (3-5 seconds)",
+      "proxy": "s3",
+      "toxic": {
+        "type": "latency",
+        "name": "s3_high_latency",
+        "stream": "downstream",
+        "toxicity": 1.0,
+        "attributes": {
+          "latency": 3000,
+          "jitter": 2000
+        }
+      }
+    },
+    {
+      "name": "s3-intermittent-failures",
+      "description": "Cause 20% of S3 requests to fail",
+      "proxy": "s3",
+      "toxic": {
+        "type": "reset_peer",
+        "name": "s3_reset",
+        "stream": "downstream",
+        "toxicity": 0.2
+      }
+    },
+    {
+      "name": "network-partition-all",
+      "description": "Simulate complete network partition",
+      "applies_to": ["redis", "postgres", "s3"],
+      "toxic": {
+        "type": "reset_peer",
+        "stream": "downstream",
+        "toxicity": 1.0
+      }
+    },
+    {
+      "name": "cascading-latency",
+      "description": "Progressive latency increase across all services",
+      "phases": [
+        {
+          "duration": "60s",
+          "proxies": {
+            "redis": {"latency": 100},
+            "postgres": {"latency": 200},
+            "s3": {"latency": 500}
+          }
+        },
+        {
+          "duration": "60s",
+          "proxies": {
+            "redis": {"latency": 500},
+            "postgres": {"latency": 1000},
+            "s3": {"latency": 2000}
+          }
+        },
+        {
+          "duration": "60s",
+          "proxies": {
+            "redis": {"latency": 1000},
+            "postgres": {"latency": 2000},
+            "s3": {"latency": 5000}
+          }
+        }
+      ]
+    }
+  ]
+}

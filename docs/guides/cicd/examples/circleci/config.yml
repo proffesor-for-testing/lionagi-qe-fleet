@@ -1,0 +1,93 @@
+# Basic CircleCI configuration for QE Fleet
+# .circleci/config.yml
+
+version: 2.1
+
+orbs:
+  python: circleci/python@2.1.1
+
+executors:
+  python-executor:
+    docker:
+      - image: cimg/python:3.11
+    working_directory: ~/project
+
+jobs:
+  generate-tests:
+    executor: python-executor
+    steps:
+      - checkout
+
+      - restore_cache:
+          keys:
+            - pip-v1-{{ checksum "requirements.txt" }}
+            - pip-v1-
+
+      - run:
+          name: Install QE Fleet
+          command: pip install lionagi-qe-fleet==1.2.1
+
+      - save_cache:
+          key: pip-v1-{{ checksum "requirements.txt" }}
+          paths:
+            - ~/.cache/pip
+
+      - run:
+          name: Generate Tests
+          command: |
+            aqe generate src/ --ci-mode --json --output tests/generated/
+
+      - persist_to_workspace:
+          root: .
+          paths:
+            - tests/generated
+
+  run-tests:
+    executor: python-executor
+    steps:
+      - checkout
+
+      - attach_workspace:
+          at: .
+
+      - run:
+          name: Install QE Fleet
+          command: pip install lionagi-qe-fleet==1.2.1
+
+      - run:
+          name: Run Tests with Coverage
+          command: |
+            aqe execute tests/ --parallel --coverage --ci-mode
+
+      - store_artifacts:
+          path: coverage.xml
+          destination: coverage
+
+      - store_artifacts:
+          path: htmlcov
+          destination: coverage-html
+
+  quality-gate:
+    executor: python-executor
+    steps:
+      - checkout
+
+      - run:
+          name: Install QE Fleet
+          command: pip install lionagi-qe-fleet==1.2.1
+
+      - run:
+          name: Quality Gate
+          command: |
+            aqe quality-gate --coverage-threshold 80 --fail-on-error
+
+workflows:
+  qe-pipeline:
+    jobs:
+      - generate-tests
+      - run-tests:
+          requires:
+            - generate-tests
+      - quality-gate:
+          requires:
+            - run-tests
