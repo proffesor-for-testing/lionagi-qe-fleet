@@ -8,6 +8,12 @@ Practical guides for using the LionAGI QE Fleet effectively.
 - [Migration Guide](migration.md) - Migrate from other testing frameworks
 - [Advanced Features Migration](advanced-features-migration.md) - Adopt advanced features
 
+### CI/CD Integration (NEW)
+- [CI/CD Integration Plan](cicd-integration-goap-plan.md) - Complete 60+ page roadmap
+- [CI/CD Executive Summary](cicd-integration-executive-summary.md) - 10-minute overview
+- [CI/CD Visual Roadmap](cicd-roadmap-visual.md) - Timeline and dependency graph
+- [CI/CD Quick Reference](cicd-quick-reference.md) - One-page cheat sheet
+
 ### Best Practices
 - [Agent Coordination](agent-coordination.md) - Coordinate agents effectively
 - [Multi-Agent Patterns](multi-agent-patterns.md) - Advanced multi-agent workflows
