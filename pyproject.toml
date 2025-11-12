@@ -1,6 +1,6 @@
 [project]
 name = "lionagi-qe-fleet"
-version = "1.2.0"
+version = "1.2.1"
 description = "Agentic Quality Engineering Fleet powered by LionAGI - 19 specialized AI agents for comprehensive software testing and quality assurance"
 authors = [
     { name = "LionAGI QE Fleet Contributors" },

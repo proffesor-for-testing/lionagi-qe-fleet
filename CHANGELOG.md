@@ -1,4 +1,4 @@
-## [1.1.2] - 2025-11-12
+## [1.2.1] - 2025-11-12
 
 ### Fixed
 - Fixed async/sync mismatch in `QEFleet.get_agent()` method (#9)

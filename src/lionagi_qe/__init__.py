@@ -9,7 +9,7 @@ from .core.orchestrator import QEOrchestrator
 from .core.base_agent import BaseQEAgent
 from .config import StorageMode, StorageConfig
 
-__version__ = "0.1.0"
+__version__ = "1.2.1"
 
 
 def QEFleet(*args, **kwargs):
