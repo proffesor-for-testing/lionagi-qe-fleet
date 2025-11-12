@@ -1,6 +1,6 @@
 # LionAGI QE Fleet
 
-[![Version](https://img.shields.io/badge/version-1.2.1-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.3.0-blue.svg)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org)
 [![Security](https://img.shields.io/badge/security-95%2F100-brightgreen.svg)](SECURITY.md)
@@ -9,7 +9,7 @@
 
 **Agentic Quality Engineering powered by LionAGI**
 
-A Python reimplementation of the Agentic QE Fleet using LionAGI as the orchestration framework. This fleet provides 18 specialized AI agents for comprehensive software testing and quality assurance.
+A Python reimplementation of the Agentic QE Fleet using LionAGI as the orchestration framework. This fleet provides 18 specialized AI agents for comprehensive software testing and quality assurance with production-ready CI/CD integration.
 
 ## 🚀 Features
 
@@ -19,6 +19,23 @@ A Python reimplementation of the Agentic QE Fleet using LionAGI as the orchestra
 - **Parallel Execution**: Async-first architecture for concurrent test operations
 - **Execution Tracking**: Foundation for continuous improvement and learning
 - **Framework Agnostic**: Works with pytest, Jest, Mocha, Cypress, and more
+
+### CI/CD Integration (v1.3.0) 🆕
+- **REST API Server**: 40+ FastAPI endpoints for test automation
+  - Test generation, execution, coverage analysis
+  - Quality gates, security scanning, performance testing
+  - WebSocket streaming for real-time progress
+  - JWT authentication and rate limiting
+- **Python SDK**: Async/sync client with fluent API
+- **Artifact Storage**: Pluggable backends (local, S3, CI-specific)
+  - Automatic compression (60-80% reduction)
+  - Retention policies and indexing
+- **Badge Generation**: Shields.io compatible SVG badges
+  - Coverage, quality, security badges
+  - Smart caching with ETag support
+- **CLI Enhancements**: CI mode with JSON output and standardized exit codes
+- **Contract Testing**: Pact-style consumer-driven contracts
+- **Chaos Engineering**: Resilience testing with fault injection
 
 ### Advanced Features (v1.0.0)
 - **alcall Integration**: Automatic retry with exponential backoff (99%+ reliability)
