@@ -64,7 +64,12 @@ def generate_api_key(name: str = "default") -> str:
 
 
 def get_api_key_hash(api_key: str) -> str:
-    """Get hash of API key for lookup."""
+    """
+    Get hash of API key for lookup.
+
+    Note: SHA-256 is used here for API key lookup/storage only, not for password hashing.
+    For password hashing, use bcrypt, scrypt, or Argon2 instead.
+    """
     return hashlib.sha256(api_key.encode()).hexdigest()
 
 
@@ -205,5 +210,6 @@ async def get_current_api_key(
 # Initialize default API key for testing
 if not _api_keys:
     default_key = generate_api_key("default-test-key")
-    print(f"Generated default API key: {default_key}")
+    # Security: Never log API keys in production. Masked for security.
+    print(f"Generated default API key: {default_key[:8]}{'*' * 24}")
     print("Use this key for testing: curl -H 'Authorization: Bearer <key>'")
