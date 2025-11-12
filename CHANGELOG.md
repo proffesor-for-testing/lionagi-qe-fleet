@@ -1,3 +1,24 @@
+## [1.2.1] - 2025-11-12
+
+### Fixed
+- Fixed async/sync mismatch in `QEFleet.get_agent()` method (#9)
+- Removed 4 incorrect `await` calls on synchronous `get_agent()` method
+- Added missing `pytest-mock` dependency for test fixtures
+
+### Improved
+- Orchestrator WIP limit enforcement for direct `execute_agent()` calls
+- Context budget percentage calculation (now returns 0-100 instead of 0.0-1.0)
+- Semaphore handling with proper cleanup using `return_exceptions=True`
+
+### Test Improvements
+- Fleet tests: **+9 tests fixed** (40% → 76%, +36% improvement)
+- Orchestrator WIP tests: **+3 tests fixed** (64.7% → 88.2%, +23.5% improvement)
+- Total: **39/42 core tests passing** (92.9% pass rate)
+
+### Contributors
+- @rooz-live - Core async/sync fixes and orchestrator improvements
+
+
 # Changelog
 
 All notable changes to the LionAGI QE Fleet project will be documented in this file.
