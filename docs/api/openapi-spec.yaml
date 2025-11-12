@@ -1,0 +1,1442 @@
+openapi: 3.0.3
+info:
+  title: LionAGI QE Fleet MCP API
+  description: |
+    Model Context Protocol (MCP) API for the LionAGI Quality Engineering Fleet.
+    Provides 17 specialized tools for comprehensive software testing and quality assurance.
+  version: 1.4.3
+  contact:
+    name: AQE Fleet Team
+    email: support@lionagi-qe.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+  - url: https://api.lionagi-qe.com/v1
+    description: Production server
+
+tags:
+  - name: Core Testing
+    description: Essential testing operations (test generation, execution, coverage)
+  - name: Performance & Security
+    description: Performance testing and security scanning
+  - name: Fleet Orchestration
+    description: Multi-agent workflow orchestration
+  - name: Advanced Testing
+    description: Specialized testing tools (flaky tests, API contracts, regression)
+  - name: Streaming
+    description: Real-time streaming operations with progress updates
+
+paths:
+  /tools/test_generate:
+    post:
+      tags:
+        - Core Testing
+      summary: Generate comprehensive test suites
+      description: AI-powered test generation with edge case detection and sublinear optimization
+      operationId: testGenerate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TestGenerateRequest'
+            examples:
+              unit_test:
+                summary: Generate unit tests
+                value:
+                  code: "def calculate_total(items): return sum(item.price for item in items)"
+                  framework: pytest
+                  test_type: unit
+                  coverage_target: 85.0
+                  include_edge_cases: true
+      responses:
+        '200':
+          description: Test suite generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestGenerateResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /tools/test_execute:
+    post:
+      tags:
+        - Core Testing
+      summary: Execute test suites with parallel processing
+      description: Multi-framework test execution with real-time coverage and streaming progress
+      operationId: testExecute
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TestExecuteRequest'
+      responses:
+        '200':
+          description: Tests executed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestExecuteResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /tools/coverage_analyze:
+    post:
+      tags:
+        - Core Testing
+      summary: Analyze test coverage with O(log n) algorithms
+      description: Real-time gap detection using sublinear algorithms for fast coverage analysis
+      operationId: coverageAnalyze
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CoverageAnalyzeRequest'
+      responses:
+        '200':
+          description: Coverage analysis complete
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CoverageAnalyzeResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /tools/quality_gate:
+    post:
+      tags:
+        - Core Testing
+      summary: Intelligent quality gate with risk assessment
+      description: Multi-factor quality validation with configurable thresholds
+      operationId: qualityGate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QualityGateRequest'
+      responses:
+        '200':
+          description: Quality gate evaluation complete
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QualityGateResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /tools/performance_test:
+    post:
+      tags:
+        - Performance & Security
+      summary: Run performance and load tests
+      description: Load testing with k6, JMeter, or Locust integration
+      operationId: performanceTest
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PerformanceTestRequest'
+      responses:
+        '200':
+          description: Performance test complete
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PerformanceTestResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /tools/security_scan:
+    post:
+      tags:
+        - Performance & Security
+      summary: Multi-layer security scanning
+      description: SAST, DAST, dependency scanning, and secrets detection
+      operationId: securityScan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SecurityScanRequest'
+      responses:
+        '200':
+          description: Security scan complete
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecurityScanResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /tools/fleet_orchestrate:
+    post:
+      tags:
+        - Fleet Orchestration
+      summary: Orchestrate multi-agent workflows
+      description: Execute pipeline, parallel, or fan-out-fan-in workflows across the fleet
+      operationId: fleetOrchestrate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FleetOrchestrateRequest'
+      responses:
+        '200':
+          description: Workflow executed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FleetOrchestrateResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /tools/fleet_status:
+    get:
+      tags:
+        - Fleet Orchestration
+      summary: Get comprehensive fleet status
+      description: Retrieve fleet initialization status, agent registry, and performance metrics
+      operationId: getFleetStatus
+      responses:
+        '200':
+          description: Fleet status retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FleetStatusResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /tools/requirements_validate:
+    post:
+      tags:
+        - Advanced Testing
+      summary: Validate requirements using INVEST criteria
+      description: BDD scenario generation and requirements quality assessment
+      operationId: requirementsValidate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequirementsValidateRequest'
+      responses:
+        '200':
+          description: Requirements validated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequirementsValidateResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /tools/flaky_test_hunt:
+    post:
+      tags:
+        - Advanced Testing
+      summary: Detect and stabilize flaky tests
+      description: Statistical flakiness detection with root cause analysis and auto-stabilization
+      operationId: flakyTestHunt
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FlakyTestHuntRequest'
+      responses:
+        '200':
+          description: Flaky test analysis complete
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FlakyTestHuntResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /tools/api_contract_validate:
+    post:
+      tags:
+        - Advanced Testing
+      summary: Validate API contracts and detect breaking changes
+      description: OpenAPI/GraphQL schema validation with backward compatibility checking
+      operationId: apiContractValidate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApiContractValidateRequest'
+      responses:
+        '200':
+          description: Contract validation complete
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiContractValidateResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /tools/regression_risk_analyze:
+    post:
+      tags:
+        - Advanced Testing
+      summary: Smart test selection with ML-based risk analysis
+      description: Intelligent test prioritization based on code changes and historical patterns
+      operationId: regressionRiskAnalyze
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegressionRiskAnalyzeRequest'
+      responses:
+        '200':
+          description: Regression risk analysis complete
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegressionRiskAnalyzeResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /tools/test_data_generate:
+    post:
+      tags:
+        - Advanced Testing
+      summary: Generate realistic test data at high speed
+      description: High-throughput data generation (10k+ records/sec) with realistic patterns
+      operationId: testDataGenerate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TestDataGenerateRequest'
+      responses:
+        '200':
+          description: Test data generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestDataGenerateResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /tools/visual_test:
+    post:
+      tags:
+        - Advanced Testing
+      summary: Visual regression testing with AI comparison
+      description: Screenshot comparison with AI-powered similarity detection
+      operationId: visualTest
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VisualTestRequest'
+      responses:
+        '200':
+          description: Visual testing complete
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VisualTestResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /tools/chaos_test:
+    post:
+      tags:
+        - Advanced Testing
+      summary: Resilience testing with fault injection
+      description: Controlled chaos engineering for system resilience validation
+      operationId: chaosTest
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChaosTestRequest'
+      responses:
+        '200':
+          description: Chaos test complete
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChaosTestResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /tools/deployment_readiness:
+    post:
+      tags:
+        - Advanced Testing
+      summary: Multi-factor deployment readiness assessment
+      description: Comprehensive pre-deployment risk assessment and validation
+      operationId: deploymentReadiness
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeploymentReadinessRequest'
+      responses:
+        '200':
+          description: Deployment readiness assessment complete
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeploymentReadinessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /tools/test_execute_stream:
+    post:
+      tags:
+        - Streaming
+      summary: Execute tests with real-time progress streaming
+      description: Stream test execution progress with Server-Sent Events (SSE)
+      operationId: testExecuteStream
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TestExecuteStreamRequest'
+      responses:
+        '200':
+          description: SSE stream of test execution progress
+          content:
+            text/event-stream:
+              schema:
+                $ref: '#/components/schemas/StreamEvent'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  schemas:
+    TestGenerateRequest:
+      type: object
+      required:
+        - code
+      properties:
+        code:
+          type: string
+          description: Source code to generate tests for
+          example: "def calculate_total(items):\n    return sum(item.price for item in items)"
+        framework:
+          $ref: '#/components/schemas/TestFramework'
+        test_type:
+          $ref: '#/components/schemas/TestType'
+        coverage_target:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 100
+          default: 80.0
+          description: Target code coverage percentage
+        include_edge_cases:
+          type: boolean
+          default: true
+          description: Include edge case and boundary testing
+
+    TestGenerateResponse:
+      type: object
+      required:
+        - test_code
+        - test_name
+        - framework
+      properties:
+        test_code:
+          type: string
+          description: Generated test code
+        test_name:
+          type: string
+          description: Name of the generated test file/suite
+        assertions:
+          type: array
+          items:
+            type: string
+          description: List of assertions included
+        edge_cases:
+          type: array
+          items:
+            type: string
+          description: Edge cases covered
+        coverage_estimate:
+          type: number
+          format: float
+          description: Estimated coverage percentage
+        framework:
+          type: string
+          description: Test framework used
+        test_type:
+          type: string
+          description: Type of tests generated
+        dependencies:
+          type: array
+          items:
+            type: string
+          description: Required test dependencies
+
+    TestExecuteRequest:
+      type: object
+      required:
+        - test_path
+      properties:
+        test_path:
+          type: string
+          description: Path to test files or directory
+          example: "./tests/unit"
+        framework:
+          $ref: '#/components/schemas/TestFramework'
+        parallel:
+          type: boolean
+          default: true
+          description: Run tests in parallel
+        coverage:
+          type: boolean
+          default: true
+          description: Collect coverage metrics
+        timeout:
+          type: integer
+          default: 300
+          minimum: 1
+          description: Test execution timeout in seconds
+
+    TestExecuteResponse:
+      type: object
+      required:
+        - passed
+        - failed
+        - skipped
+        - success
+      properties:
+        passed:
+          type: integer
+          minimum: 0
+          description: Number of tests passed
+        failed:
+          type: integer
+          minimum: 0
+          description: Number of tests failed
+        skipped:
+          type: integer
+          minimum: 0
+          description: Number of tests skipped
+        coverage:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 100
+          description: Coverage percentage (if enabled)
+        duration:
+          type: number
+          format: float
+          description: Execution duration in seconds
+        failures:
+          type: array
+          items:
+            $ref: '#/components/schemas/TestFailure'
+          description: List of failure details
+        success:
+          type: boolean
+          description: Whether all tests passed
+
+    CoverageAnalyzeRequest:
+      type: object
+      required:
+        - source_path
+        - test_path
+      properties:
+        source_path:
+          type: string
+          description: Path to source code
+          example: "./src"
+        test_path:
+          type: string
+          description: Path to test files
+          example: "./tests"
+        threshold:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 100
+          default: 80.0
+          description: Minimum acceptable coverage threshold
+        algorithm:
+          type: string
+          enum: [sublinear, linear, comprehensive]
+          default: sublinear
+          description: Analysis algorithm to use
+
+    CoverageAnalyzeResponse:
+      type: object
+      required:
+        - overall_coverage
+        - meets_threshold
+      properties:
+        overall_coverage:
+          type: number
+          format: float
+          description: Overall coverage percentage
+        file_coverage:
+          type: object
+          additionalProperties:
+            type: number
+          description: Per-file coverage breakdown
+        gaps:
+          type: array
+          items:
+            $ref: '#/components/schemas/CoverageGap'
+          description: List of coverage gaps with priorities
+        recommendations:
+          type: array
+          items:
+            type: string
+          description: AI-generated recommendations
+        meets_threshold:
+          type: boolean
+          description: Whether threshold is met
+
+    QualityGateRequest:
+      type: object
+      required:
+        - metrics
+      properties:
+        metrics:
+          type: object
+          additionalProperties:
+            type: number
+          description: Quality metrics to evaluate
+        thresholds:
+          type: object
+          additionalProperties:
+            type: number
+          description: Custom thresholds (defaults applied if not provided)
+
+    QualityGateResponse:
+      type: object
+      required:
+        - passed
+        - score
+      properties:
+        passed:
+          type: boolean
+          description: Whether quality gate passed
+        score:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 100
+          description: Overall quality score
+        violations:
+          type: array
+          items:
+            $ref: '#/components/schemas/QualityViolation'
+          description: List of threshold violations
+        risks:
+          type: array
+          items:
+            $ref: '#/components/schemas/Risk'
+          description: Identified risks with severity
+        recommendations:
+          type: array
+          items:
+            type: string
+          description: Improvement recommendations
+
+    PerformanceTestRequest:
+      type: object
+      required:
+        - endpoint
+      properties:
+        endpoint:
+          type: string
+          format: uri
+          description: API endpoint or URL to test
+          example: "https://api.example.com/users"
+        duration:
+          type: integer
+          default: 60
+          minimum: 1
+          description: Test duration in seconds
+        users:
+          type: integer
+          default: 10
+          minimum: 1
+          description: Number of concurrent users
+        ramp_up:
+          type: integer
+          default: 5
+          minimum: 0
+          description: Ramp-up time in seconds
+        tool:
+          type: string
+          enum: [locust, k6, jmeter, gatling]
+          default: locust
+          description: Performance testing tool
+
+    PerformanceTestResponse:
+      type: object
+      required:
+        - requests_per_second
+        - error_rate
+        - total_requests
+      properties:
+        requests_per_second:
+          type: number
+          format: float
+          description: Average RPS
+        response_time_p50:
+          type: number
+          format: float
+          description: 50th percentile response time (ms)
+        response_time_p95:
+          type: number
+          format: float
+          description: 95th percentile response time (ms)
+        response_time_p99:
+          type: number
+          format: float
+          description: 99th percentile response time (ms)
+        error_rate:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 100
+          description: Percentage of failed requests
+        total_requests:
+          type: integer
+          minimum: 0
+          description: Total requests made
+
+    SecurityScanRequest:
+      type: object
+      required:
+        - path
+      properties:
+        path:
+          type: string
+          description: Path to code or application to scan
+          example: "./src"
+        scan_type:
+          $ref: '#/components/schemas/ScanType'
+        severity_threshold:
+          type: string
+          enum: [low, medium, high, critical]
+          default: medium
+          description: Minimum severity to report
+
+    SecurityScanResponse:
+      type: object
+      required:
+        - vulnerabilities
+        - severity_counts
+        - risk_score
+      properties:
+        vulnerabilities:
+          type: array
+          items:
+            $ref: '#/components/schemas/Vulnerability'
+          description: List of vulnerabilities found
+        severity_counts:
+          type: object
+          properties:
+            low:
+              type: integer
+            medium:
+              type: integer
+            high:
+              type: integer
+            critical:
+              type: integer
+          description: Count by severity level
+        risk_score:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 100
+          description: Overall security risk score
+        recommendations:
+          type: array
+          items:
+            type: string
+          description: Security improvement recommendations
+        compliance_status:
+          type: object
+          additionalProperties:
+            type: boolean
+          description: Compliance check results
+
+    FleetOrchestrateRequest:
+      type: object
+      required:
+        - workflow
+        - context
+      properties:
+        workflow:
+          type: string
+          enum: [pipeline, parallel, fan-out-fan-in]
+          description: Workflow type
+        context:
+          type: object
+          description: Workflow context and parameters
+        agents:
+          type: array
+          items:
+            type: string
+          description: List of agent IDs to use (auto-selected if None)
+
+    FleetOrchestrateResponse:
+      type: object
+      required:
+        - success
+      properties:
+        results:
+          type: object
+          description: Workflow execution results
+        agents_used:
+          type: array
+          items:
+            type: string
+          description: List of agents that participated
+        duration:
+          type: number
+          format: float
+          description: Total execution time in seconds
+        success:
+          type: boolean
+          description: Whether workflow succeeded
+
+    FleetStatusResponse:
+      type: object
+      required:
+        - initialized
+        - agents
+      properties:
+        initialized:
+          type: boolean
+          description: Whether fleet is initialized
+        agents:
+          type: array
+          items:
+            $ref: '#/components/schemas/AgentStatus'
+          description: List of registered agents
+        memory_stats:
+          type: object
+          description: Memory usage statistics
+        routing_stats:
+          type: object
+          description: Model routing statistics (if enabled)
+        performance_metrics:
+          type: object
+          description: Performance metrics
+
+    RequirementsValidateRequest:
+      type: object
+      required:
+        - requirements
+      properties:
+        requirements:
+          type: array
+          items:
+            type: string
+          description: List of requirements to validate
+        format:
+          type: string
+          enum: [user_story, use_case, acceptance_criteria]
+          default: user_story
+          description: Format of requirements
+
+    RequirementsValidateResponse:
+      type: object
+      required:
+        - valid_requirements
+        - invalid_requirements
+      properties:
+        valid_requirements:
+          type: array
+          items:
+            type: string
+          description: List of valid requirements
+        invalid_requirements:
+          type: array
+          items:
+            $ref: '#/components/schemas/InvalidRequirement'
+          description: List with validation issues
+        bdd_scenarios:
+          type: array
+          items:
+            type: string
+          description: Generated BDD scenarios
+        invest_scores:
+          type: object
+          additionalProperties:
+            type: object
+          description: INVEST criteria scores per requirement
+
+    FlakyTestHuntRequest:
+      type: object
+      required:
+        - test_path
+      properties:
+        test_path:
+          type: string
+          description: Path to tests to analyze
+          example: "./tests"
+        iterations:
+          type: integer
+          default: 10
+          minimum: 1
+          description: Number of iterations to run
+        detect_threshold:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          default: 0.1
+          description: Flakiness detection threshold
+
+    FlakyTestHuntResponse:
+      type: object
+      required:
+        - flaky_tests
+      properties:
+        flaky_tests:
+          type: array
+          items:
+            type: string
+          description: List of detected flaky tests
+        stability_scores:
+          type: object
+          additionalProperties:
+            type: number
+          description: Stability score per test
+        root_causes:
+          type: array
+          items:
+            type: string
+          description: Identified root causes
+        fixes:
+          type: array
+          items:
+            type: string
+          description: Suggested stabilization fixes
+
+    ApiContractValidateRequest:
+      type: object
+      required:
+        - spec_path
+        - version_a
+      properties:
+        spec_path:
+          type: string
+          description: Path to API specification (OpenAPI, GraphQL schema)
+          example: "./docs/api/openapi-spec.yaml"
+        version_a:
+          type: string
+          description: First version to compare
+          example: "v1.4.2"
+        version_b:
+          type: string
+          description: Second version to compare (if checking for breaking changes)
+          example: "v1.4.3"
+
+    ApiContractValidateResponse:
+      type: object
+      required:
+        - valid
+      properties:
+        valid:
+          type: boolean
+          description: Whether contract is valid
+        breaking_changes:
+          type: array
+          items:
+            $ref: '#/components/schemas/BreakingChange'
+          description: List of breaking changes (if comparing versions)
+        warnings:
+          type: array
+          items:
+            type: string
+          description: Non-breaking warnings
+        recommendations:
+          type: array
+          items:
+            type: string
+          description: Contract improvement recommendations
+
+    RegressionRiskAnalyzeRequest:
+      type: object
+      required:
+        - changes
+        - test_suite
+      properties:
+        changes:
+          type: array
+          items:
+            type: string
+          description: List of changed files or modules
+        test_suite:
+          type: string
+          description: Path to test suite
+          example: "./tests"
+        ml_enabled:
+          type: boolean
+          default: true
+          description: Use ML patterns for risk prediction
+
+    RegressionRiskAnalyzeResponse:
+      type: object
+      required:
+        - high_risk_tests
+      properties:
+        high_risk_tests:
+          type: array
+          items:
+            type: string
+          description: Tests that should run (high risk)
+        medium_risk_tests:
+          type: array
+          items:
+            type: string
+          description: Tests that could run
+        low_risk_tests:
+          type: array
+          items:
+            type: string
+          description: Tests that can be skipped
+        risk_scores:
+          type: object
+          additionalProperties:
+            type: number
+          description: Risk score per test
+        estimated_time_saved:
+          type: number
+          format: float
+          description: Time saved by smart selection (seconds)
+
+    TestDataGenerateRequest:
+      type: object
+      required:
+        - schema
+      properties:
+        schema:
+          type: object
+          description: Data schema definition
+        count:
+          type: integer
+          default: 1000
+          minimum: 1
+          description: Number of records to generate
+        realistic:
+          type: boolean
+          default: true
+          description: Use realistic data patterns vs random
+
+    TestDataGenerateResponse:
+      type: object
+      required:
+        - data
+        - record_count
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+          description: Generated test data
+        record_count:
+          type: integer
+          description: Number of records generated
+        generation_time:
+          type: number
+          format: float
+          description: Time taken to generate (seconds)
+        records_per_second:
+          type: number
+          format: float
+          description: Generation throughput
+
+    VisualTestRequest:
+      type: object
+      required:
+        - baseline_path
+        - current_path
+      properties:
+        baseline_path:
+          type: string
+          description: Path to baseline screenshots
+          example: "./tests/visual/baseline"
+        current_path:
+          type: string
+          description: Path to current screenshots
+          example: "./tests/visual/current"
+        threshold:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          default: 0.95
+          description: Similarity threshold
+
+    VisualTestResponse:
+      type: object
+      required:
+        - matches
+        - differences
+      properties:
+        matches:
+          type: integer
+          description: Number of matching screenshots
+        differences:
+          type: integer
+          description: Number of different screenshots
+        diff_details:
+          type: array
+          items:
+            type: object
+          description: Detailed diff information
+        similarity_scores:
+          type: object
+          additionalProperties:
+            type: number
+          description: Similarity score per screenshot
+
+    ChaosTestRequest:
+      type: object
+      required:
+        - target
+        - fault_types
+      properties:
+        target:
+          type: string
+          description: Target system or service
+          example: "http://api.example.com"
+        fault_types:
+          type: array
+          items:
+            type: string
+            enum: [latency, errors, resource_exhaustion, network_partition]
+          description: Types of faults to inject
+        duration:
+          type: integer
+          default: 300
+          minimum: 1
+          description: Test duration in seconds
+
+    ChaosTestResponse:
+      type: object
+      required:
+        - resilience_score
+      properties:
+        resilience_score:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 100
+          description: Overall resilience score
+        fault_results:
+          type: object
+          additionalProperties:
+            type: object
+          description: Results per fault type
+        recovery_times:
+          type: object
+          additionalProperties:
+            type: number
+          description: Time to recover from each fault (seconds)
+        recommendations:
+          type: array
+          items:
+            type: string
+          description: Resilience improvement recommendations
+
+    DeploymentReadinessRequest:
+      type: object
+      required:
+        - version
+      properties:
+        version:
+          type: string
+          description: Version to deploy
+          example: "v1.4.3"
+        environment:
+          type: string
+          default: production
+          description: Target environment
+
+    DeploymentReadinessResponse:
+      type: object
+      required:
+        - ready
+        - risk_level
+      properties:
+        ready:
+          type: boolean
+          description: Whether deployment is recommended
+        risk_level:
+          type: string
+          enum: [low, medium, high, critical]
+          description: Overall risk level
+        factors:
+          type: object
+          description: Assessment of individual factors
+        blockers:
+          type: array
+          items:
+            type: string
+          description: List of blocking issues
+        recommendations:
+          type: array
+          items:
+            type: string
+          description: Pre-deployment recommendations
+
+    TestExecuteStreamRequest:
+      type: object
+      required:
+        - test_path
+      properties:
+        test_path:
+          type: string
+          description: Path to test files or directory
+        framework:
+          $ref: '#/components/schemas/TestFramework'
+        parallel:
+          type: boolean
+          default: true
+        coverage:
+          type: boolean
+          default: true
+
+    StreamEvent:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum: [progress, result, error]
+          description: Event type
+        percent:
+          type: number
+          format: float
+          description: Progress percentage (for progress events)
+        message:
+          type: string
+          description: Progress message
+        data:
+          type: object
+          description: Event data (for result events)
+
+    TestFramework:
+      type: string
+      enum: [pytest, jest, mocha, cypress, playwright, junit]
+      description: Supported test frameworks
+
+    TestType:
+      type: string
+      enum: [unit, integration, e2e, performance, security, api]
+      description: Test types
+
+    ScanType:
+      type: string
+      enum: [sast, dast, dependency, secrets, comprehensive]
+      description: Security scan types
+
+    TestFailure:
+      type: object
+      properties:
+        test_name:
+          type: string
+        error_message:
+          type: string
+        stack_trace:
+          type: string
+
+    CoverageGap:
+      type: object
+      properties:
+        file:
+          type: string
+        line_start:
+          type: integer
+        line_end:
+          type: integer
+        priority:
+          type: string
+          enum: [low, medium, high, critical]
+
+    QualityViolation:
+      type: object
+      properties:
+        metric:
+          type: string
+        expected:
+          type: number
+        actual:
+          type: number
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+
+    Risk:
+      type: object
+      properties:
+        category:
+          type: string
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+        description:
+          type: string
+
+    Vulnerability:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+        description:
+          type: string
+        file:
+          type: string
+        line:
+          type: integer
+
+    AgentStatus:
+      type: object
+      properties:
+        agent_id:
+          type: string
+        type:
+          type: string
+        status:
+          type: string
+          enum: [idle, busy, error]
+        tasks_completed:
+          type: integer
+
+    InvalidRequirement:
+      type: object
+      properties:
+        requirement:
+          type: string
+        issues:
+          type: array
+          items:
+            type: string
+
+    BreakingChange:
+      type: object
+      properties:
+        type:
+          type: string
+        path:
+          type: string
+        description:
+          type: string
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+
+    Error:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          description: Error type
+        message:
+          type: string
+          description: Human-readable error message
+        details:
+          type: object
+          description: Additional error details
+
+  responses:
+    BadRequest:
+      description: Bad request - invalid parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "BadRequest"
+            message: "Invalid test framework specified"
+            details:
+              framework: "unsupported_framework"
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "InternalServerError"
+            message: "Agent execution failed"
+            details:
+              agent: "test-generator"
+              reason: "timeout"
+
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key for authentication
+
+security:
+  - ApiKeyAuth: []

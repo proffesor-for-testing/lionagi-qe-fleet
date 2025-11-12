@@ -1,0 +1,185 @@
+{
+  "version": "1.0.0",
+  "title": "Redis Connection Failure Resilience",
+  "description": "Test system resilience when Redis becomes unavailable",
+  "tags": ["redis", "connection-failure", "resilience", "phase1"],
+  "configuration": {
+    "redis_host": {
+      "type": "env",
+      "key": "REDIS_HOST",
+      "default": "localhost"
+    },
+    "redis_port": {
+      "type": "env",
+      "key": "REDIS_PORT",
+      "default": 6379
+    },
+    "blast_radius_max_users": 100,
+    "blast_radius_max_duration": "5m"
+  },
+  "steady-state-hypothesis": {
+    "title": "System maintains functionality without Redis",
+    "probes": [
+      {
+        "type": "probe",
+        "name": "system-health-check",
+        "tolerance": {
+          "type": "jsonpath",
+          "path": "$.status",
+          "expect": "healthy"
+        },
+        "provider": {
+          "type": "http",
+          "url": "http://localhost:8000/health",
+          "timeout": 5
+        }
+      },
+      {
+        "type": "probe",
+        "name": "error-rate-acceptable",
+        "tolerance": {
+          "type": "range",
+          "range": [0.0, 0.05]
+        },
+        "provider": {
+          "type": "python",
+          "module": "tests.chaos.probes.metrics",
+          "func": "get_error_rate",
+          "arguments": {
+            "duration": "1m"
+          }
+        }
+      },
+      {
+        "type": "probe",
+        "name": "response-time-acceptable",
+        "tolerance": {
+          "type": "range",
+          "range": [0, 2000]
+        },
+        "provider": {
+          "type": "python",
+          "module": "tests.chaos.probes.metrics",
+          "func": "get_p99_latency_ms",
+          "arguments": {
+            "duration": "1m"
+          }
+        }
+      }
+    ]
+  },
+  "method": [
+    {
+      "type": "action",
+      "name": "baseline-metrics-collection",
+      "provider": {
+        "type": "python",
+        "module": "tests.chaos.actions.metrics",
+        "func": "collect_baseline_metrics",
+        "arguments": {
+          "duration": "60s",
+          "metrics": ["error_rate", "latency_p99", "throughput", "redis_operations"]
+        }
+      }
+    },
+    {
+      "type": "action",
+      "name": "block-redis-connection",
+      "provider": {
+        "type": "process",
+        "path": "iptables",
+        "arguments": [
+          "-A", "OUTPUT",
+          "-p", "tcp",
+          "--dport", "${redis_port}",
+          "-j", "DROP"
+        ]
+      },
+      "pauses": {
+        "after": 10
+      }
+    },
+    {
+      "type": "probe",
+      "name": "verify-fallback-mechanism",
+      "provider": {
+        "type": "python",
+        "module": "tests.chaos.probes.fallback",
+        "func": "verify_redis_fallback_active",
+        "arguments": {
+          "expected_fallback": "session_context"
+        }
+      }
+    },
+    {
+      "type": "probe",
+      "name": "check-blast-radius",
+      "provider": {
+        "type": "python",
+        "module": "tests.chaos.probes.blast_radius",
+        "func": "check_blast_radius",
+        "arguments": {
+          "max_affected_users": 100,
+          "max_affected_services": 1
+        }
+      }
+    },
+    {
+      "type": "action",
+      "name": "monitor-system-behavior",
+      "background": true,
+      "provider": {
+        "type": "python",
+        "module": "tests.chaos.actions.monitoring",
+        "func": "monitor_during_chaos",
+        "arguments": {
+          "duration": "300s",
+          "sampling_interval": "5s",
+          "metrics": ["error_rate", "latency", "memory_usage", "fallback_hits"]
+        }
+      }
+    }
+  ],
+  "rollbacks": [
+    {
+      "type": "action",
+      "name": "restore-redis-connection",
+      "provider": {
+        "type": "process",
+        "path": "iptables",
+        "arguments": [
+          "-D", "OUTPUT",
+          "-p", "tcp",
+          "--dport", "${redis_port}",
+          "-j", "DROP"
+        ]
+      }
+    },
+    {
+      "type": "action",
+      "name": "verify-redis-reconnection",
+      "provider": {
+        "type": "python",
+        "module": "tests.chaos.actions.validation",
+        "func": "verify_redis_connection_restored",
+        "arguments": {
+          "host": "${redis_host}",
+          "port": "${redis_port}",
+          "timeout": 30
+        }
+      }
+    },
+    {
+      "type": "action",
+      "name": "collect-recovery-metrics",
+      "provider": {
+        "type": "python",
+        "module": "tests.chaos.actions.metrics",
+        "func": "collect_recovery_metrics",
+        "arguments": {
+          "duration": "60s"
+        }
+      }
+    }
+  ]
+}

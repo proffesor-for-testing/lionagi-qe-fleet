@@ -1,0 +1,257 @@
+{
+  "version": "1.0.0",
+  "date": "2025-11-12T10:45:01.932391",
+  "agent": "qe-chaos-engineer",
+  "status": "ready_for_execution",
+  "memory_key": "aqe/test-plan/phase1-resilience",
+
+  "executive_summary": {
+    "description": "Comprehensive chaos engineering and resilience testing strategy for LionAGI QE Fleet Phase 1",
+    "components_tested": 5,
+    "total_scenarios": 25,
+    "deliverables_created": 14,
+    "estimated_execution_time": "4 weeks"
+  },
+
+  "scope": {
+    "components": [
+      "Redis (RedisMemory) - Connection failures, pool exhaustion, latency",
+      "PostgreSQL (PostgresMemory) - Pool exhaustion, query timeouts, transactions",
+      "Storage (S3/filesystem) - Network failures, permission errors, disk exhaustion",
+      "Network - Latency injection, packet loss, partitions, bandwidth limits",
+      "Resources - CPU, memory, disk, file handle exhaustion"
+    ],
+    "fault_types": [
+      "connection_failures",
+      "pool_exhaustion",
+      "latency_injection",
+      "packet_loss",
+      "resource_exhaustion",
+      "data_consistency"
+    ],
+    "recovery_mechanisms": [
+      "circuit_breaker",
+      "retry_with_backoff",
+      "fallback_mechanisms",
+      "graceful_degradation"
+    ]
+  },
+
+  "deliverables": {
+    "chaos_toolkit_experiments": 3,
+    "toxiproxy_scenarios": 10,
+    "pytest_test_suites": 6,
+    "total_test_cases": 100,
+    "documentation_files": 3,
+    "runbooks": 1,
+    "automation_scripts": 1
+  },
+
+  "files_created": [
+    "tests/chaos/chaostoolkit/redis-failure-experiment.json",
+    "tests/chaos/chaostoolkit/postgres-failure-experiment.json",
+    "tests/chaos/chaostoolkit/storage-failure-experiment.json",
+    "tests/chaos/toxiproxy/toxiproxy-config.json",
+    "tests/chaos/resilience/test_redis_resilience.py",
+    "tests/chaos/resilience/test_postgres_resilience.py",
+    "tests/chaos/resilience/test_storage_resilience.py",
+    "tests/chaos/resilience/test_network_resilience.py",
+    "tests/chaos/resilience/test_resource_exhaustion.py",
+    "tests/chaos/resilience/test_observability.py",
+    "tests/chaos/README.md",
+    "tests/chaos/scenarios/redis-chaos-playbook.md",
+    "tests/chaos/scenarios/run_chaos_suite.sh",
+    "docs/chaos-engineering-strategy-phase1.md"
+  ],
+
+  "safety_constraints": {
+    "max_affected_services": 1,
+    "max_affected_users": 100,
+    "max_duration_minutes": 5,
+    "max_error_rate": 0.05,
+    "max_p99_latency_ms": 5000,
+    "auto_rollback_enabled": true
+  },
+
+  "recovery_slas": {
+    "redis_recovery_seconds": 30,
+    "postgres_recovery_seconds": 60,
+    "storage_recovery_seconds": 30,
+    "network_recovery_seconds": 30,
+    "resource_recovery_seconds": 60
+  },
+
+  "experiments_by_component": {
+    "redis": {
+      "hypothesis": "System maintains functionality when Redis unavailable via fallback to Session.context",
+      "fault_types": 4,
+      "expected_behaviors": 4,
+      "test_files": 2
+    },
+    "postgres": {
+      "hypothesis": "System degrades gracefully during connection pool exhaustion with queuing",
+      "fault_types": 3,
+      "expected_behaviors": 4,
+      "test_files": 2
+    },
+    "storage": {
+      "hypothesis": "System handles storage failures with automatic fallback and no data loss",
+      "fault_types": 3,
+      "expected_behaviors": 4,
+      "test_files": 2
+    },
+    "network": {
+      "hypothesis": "System tolerates network latency up to 1s and 10% packet loss",
+      "fault_types": 3,
+      "expected_behaviors": 4,
+      "test_files": 2
+    },
+    "resources": {
+      "hypothesis": "System degrades gracefully under resource pressure with load shedding",
+      "fault_types": 4,
+      "expected_behaviors": 4,
+      "test_files": 1
+    }
+  },
+
+  "observability": {
+    "metrics_collected": [
+      "error_rate",
+      "latency_p99",
+      "throughput",
+      "circuit_breaker_state",
+      "retry_count",
+      "fallback_activations",
+      "recovery_time"
+    ],
+    "logging_format": "structured_json",
+    "tracing": "distributed_traces_with_chaos_spans",
+    "alerting_levels": ["critical", "warning"]
+  },
+
+  "resilience_scoring": {
+    "formula": "Availability(40%) + RecoveryTime(30%) + BlastRadius(20%) + Degradation(10%)",
+    "max_score": 100,
+    "targets": {
+      "redis": 85,
+      "postgres": 85,
+      "storage": 80,
+      "network": 80,
+      "resources": 75
+    }
+  },
+
+  "execution_phases": {
+    "week_1": {
+      "focus": "Setup and configuration",
+      "activities": [
+        "Install Chaos Toolkit and Toxiproxy",
+        "Configure staging environment",
+        "Verify pre-flight checks"
+      ]
+    },
+    "week_2": {
+      "focus": "Isolated component testing",
+      "activities": [
+        "Redis chaos experiments",
+        "PostgreSQL chaos experiments",
+        "Storage chaos experiments"
+      ]
+    },
+    "week_3": {
+      "focus": "Network chaos testing",
+      "activities": [
+        "Latency injection",
+        "Packet loss scenarios",
+        "Network partition testing"
+      ]
+    },
+    "week_4": {
+      "focus": "Combined scenarios",
+      "activities": [
+        "Resource exhaustion testing",
+        "Multi-component chaos",
+        "Full system validation"
+      ]
+    },
+    "week_5_plus": {
+      "focus": "Continuous chaos",
+      "activities": [
+        "CI/CD integration",
+        "Scheduled game days",
+        "Low-intensity production chaos"
+      ]
+    }
+  },
+
+  "quick_start": {
+    "chaos_toolkit": "chaos run tests/chaos/chaostoolkit/redis-failure-experiment.json",
+    "toxiproxy": "toxiproxy-cli toxic add redis --type=latency --attribute=latency=500",
+    "pytest": "pytest tests/chaos/resilience/ -v --tb=short",
+    "full_suite": "bash tests/chaos/scenarios/run_chaos_suite.sh"
+  },
+
+  "key_patterns_tested": {
+    "circuit_breaker": {
+      "threshold": 5,
+      "timeout_seconds": 30,
+      "states": ["open", "closed", "half-open"]
+    },
+    "retry_with_backoff": {
+      "initial_delay_seconds": 1,
+      "backoff_factor": 2,
+      "max_attempts": 3,
+      "jitter_ms": 200
+    },
+    "fallback_mechanisms": {
+      "redis_fallback": "session_context",
+      "s3_fallback": "local_filesystem",
+      "postgres_fallback": "read_only_mode"
+    },
+    "graceful_degradation": {
+      "load_shedding": "503_responses",
+      "request_prioritization": "critical_first",
+      "feature_disabling": "non_critical_features"
+    }
+  },
+
+  "success_criteria": {
+    "must_have": [
+      "All Chaos Toolkit experiments pass",
+      "All pytest resilience tests pass",
+      "Auto-rollback triggers work",
+      "Recovery time meets SLAs",
+      "Zero data loss",
+      "Blast radius limits enforced"
+    ],
+    "should_have": [
+      "Resilience scores > 80",
+      "Observability dashboards functional",
+      "Runbooks complete",
+      "Team trained"
+    ],
+    "nice_to_have": [
+      "Continuous chaos in production",
+      "Automated scheduling",
+      "ML anomaly detection",
+      "Chaos recommendations"
+    ]
+  },
+
+  "references": {
+    "chaos_toolkit": "https://chaostoolkit.org/",
+    "toxiproxy": "https://github.com/Shopify/toxiproxy",
+    "principles_of_chaos": "https://principlesofchaos.org/",
+    "google_sre_book": "https://sre.google/sre-book/testing-reliability/"
+  },
+
+  "contact": {
+    "agent": "qe-chaos-engineer",
+    "skills": [
+      "chaos-engineering-resilience",
+      "shift-right-testing",
+      "risk-based-testing"
+    ],
+    "memory_namespace": "aqe/chaos/*"
+  }
+}

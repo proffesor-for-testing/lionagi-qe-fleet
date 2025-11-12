@@ -1,0 +1,175 @@
+{
+  "version": "1.0.0",
+  "title": "PostgreSQL Connection Pool Exhaustion",
+  "description": "Test system behavior when database connection pool is exhausted",
+  "tags": ["postgres", "connection-pool", "resource-exhaustion", "phase1"],
+  "configuration": {
+    "db_host": {
+      "type": "env",
+      "key": "DATABASE_HOST",
+      "default": "localhost"
+    },
+    "db_port": {
+      "type": "env",
+      "key": "DATABASE_PORT",
+      "default": 5432
+    },
+    "max_pool_size": 10,
+    "exhaustion_connections": 20
+  },
+  "steady-state-hypothesis": {
+    "title": "System degrades gracefully during database connection exhaustion",
+    "probes": [
+      {
+        "type": "probe",
+        "name": "database-connectivity",
+        "tolerance": true,
+        "provider": {
+          "type": "python",
+          "module": "tests.chaos.probes.database",
+          "func": "check_database_connection",
+          "arguments": {
+            "host": "${db_host}",
+            "port": "${db_port}"
+          }
+        }
+      },
+      {
+        "type": "probe",
+        "name": "connection-pool-available",
+        "tolerance": {
+          "type": "range",
+          "range": [1, 10]
+        },
+        "provider": {
+          "type": "python",
+          "module": "tests.chaos.probes.database",
+          "func": "get_available_connections"
+        }
+      },
+      {
+        "type": "probe",
+        "name": "system-accepts-requests",
+        "tolerance": true,
+        "provider": {
+          "type": "http",
+          "url": "http://localhost:8000/api/test",
+          "timeout": 5,
+          "expected_status": [200, 503]
+        }
+      }
+    ]
+  },
+  "method": [
+    {
+      "type": "action",
+      "name": "collect-baseline-pool-metrics",
+      "provider": {
+        "type": "python",
+        "module": "tests.chaos.actions.database",
+        "func": "collect_pool_metrics",
+        "arguments": {
+          "duration": "30s"
+        }
+      }
+    },
+    {
+      "type": "action",
+      "name": "exhaust-connection-pool",
+      "provider": {
+        "type": "python",
+        "module": "tests.chaos.actions.database",
+        "func": "exhaust_connection_pool",
+        "arguments": {
+          "connections_to_create": "${exhaustion_connections}",
+          "hold_duration": "180s",
+          "gradual": true,
+          "ramp_up_time": "60s"
+        }
+      },
+      "pauses": {
+        "after": 15
+      }
+    },
+    {
+      "type": "probe",
+      "name": "verify-circuit-breaker-active",
+      "provider": {
+        "type": "python",
+        "module": "tests.chaos.probes.resilience",
+        "func": "check_circuit_breaker_state",
+        "arguments": {
+          "component": "database",
+          "expected_state": "open"
+        }
+      }
+    },
+    {
+      "type": "probe",
+      "name": "verify-queue-based-buffering",
+      "provider": {
+        "type": "python",
+        "module": "tests.chaos.probes.resilience",
+        "func": "check_request_queue_active",
+        "arguments": {
+          "max_queue_size": 100
+        }
+      }
+    },
+    {
+      "type": "probe",
+      "name": "measure-error-rate-impact",
+      "tolerance": {
+        "type": "range",
+        "range": [0.0, 0.15]
+      },
+      "provider": {
+        "type": "python",
+        "module": "tests.chaos.probes.metrics",
+        "func": "get_error_rate",
+        "arguments": {
+          "duration": "30s"
+        }
+      }
+    }
+  ],
+  "rollbacks": [
+    {
+      "type": "action",
+      "name": "release-connections",
+      "provider": {
+        "type": "python",
+        "module": "tests.chaos.actions.database",
+        "func": "release_all_connections"
+      }
+    },
+    {
+      "type": "action",
+      "name": "verify-pool-recovered",
+      "provider": {
+        "type": "python",
+        "module": "tests.chaos.actions.database",
+        "func": "verify_pool_health",
+        "arguments": {
+          "timeout": 60,
+          "min_available": 5
+        }
+      }
+    },
+    {
+      "type": "probe",
+      "name": "verify-circuit-breaker-closed",
+      "provider": {
+        "type": "python",
+        "module": "tests.chaos.probes.resilience",
+        "func": "check_circuit_breaker_state",
+        "arguments": {
+          "component": "database",
+          "expected_state": "closed",
+          "wait_for_recovery": true,
+          "timeout": 60
+        }
+      }
+    }
+  ]
+}

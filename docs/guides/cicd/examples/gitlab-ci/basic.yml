@@ -1,0 +1,42 @@
+# Basic GitLab CI configuration for QE Fleet
+# .gitlab-ci.yml
+
+image: python:3.11-slim
+
+stages:
+  - test
+  - quality
+
+variables:
+  QE_FLEET_VERSION: "1.2.1"
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.pip-cache"
+
+cache:
+  paths:
+    - .pip-cache/
+
+before_script:
+  - pip install lionagi-qe-fleet==$QE_FLEET_VERSION
+
+generate_tests:
+  stage: test
+  script:
+    - aqe generate src/ --ci-mode --json --output tests/generated/
+    - aqe execute tests/ --parallel --coverage --ci-mode
+  coverage: '/Coverage: (\d+\.\d+)%/'
+  artifacts:
+    paths:
+      - tests/generated/
+      - coverage.xml
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+    expire_in: 30 days
+
+quality_gate:
+  stage: quality
+  script:
+    - aqe quality-gate --coverage-threshold 80 --fail-on-error
+  needs:
+    - generate_tests
