@@ -25,7 +25,8 @@ async def test_websocket_job_streaming(job_id: str, api_key: str) -> None:
     ws_url = f"ws://localhost:8080/api/v1/job/{job_id}/stream"
 
     print(f"🔌 Connecting to WebSocket: {ws_url}")
-    print(f"🔑 Using API Key: {api_key[:20]}...\n")
+    # Security: Mask API key in logs - show only first 8 chars
+    print(f"🔑 Using API Key: {api_key[:8]}{'*' * 16}...\n")
 
     try:
         # Connect with authorization header
