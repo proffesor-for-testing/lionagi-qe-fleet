@@ -6,6 +6,7 @@
 [![Security](https://img.shields.io/badge/security-95%2F100-brightgreen.svg)](SECURITY.md)
 [![Tests](https://img.shields.io/badge/tests-82%25-green.svg)](tests/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+[![Sponsor](https://img.shields.io/badge/Sponsor-Support%20Development-ff69b4.svg)](SPONSORS.md)
 
 **Agentic Quality Engineering powered by LionAGI**
 
@@ -432,6 +433,14 @@ This project builds on [LionAGI](https://github.com/lion-agi/lionagi) (Apache 2.
 **Performance**: 5-10x faster than baseline
 
 See [CHANGELOG.md](CHANGELOG.md) for release notes.
+
+## 💖 Support This Project
+
+If LionAGI QE Fleet helps your work, consider supporting its development:
+
+**[Become a Sponsor](SPONSORS.md)** - $5/month or $50/year
+
+Your support enables continued development, bug fixes, and new features.
 
 ## 🙏 Acknowledgments
 
